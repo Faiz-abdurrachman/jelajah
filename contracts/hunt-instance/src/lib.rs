@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, xdr::ToXdr, Address, BytesN, Env, Vec,
 };
 
 mod event;
@@ -13,8 +13,8 @@ const CLAIM_TIMER_SECONDS: u64 = 24 * 60 * 60;
 // ─── Error Codes ──────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
-#[contracttype]
-pub enum Error {
+#[contracterror]
+pub enum ContractError {
     NotAuthorized = 1,
     NotInRadius = 2,
     HuntExpired = 3,
@@ -118,18 +118,18 @@ impl HuntInstance {
             .get(&DataKey::Status)
             .unwrap_or(HuntStatus::Expired);
         if status != HuntStatus::Active {
-            panic_with_error!(&env, Error::NotActive);
+            panic_with_error!(&env, ContractError::NotActive);
         }
 
         let deadline: u64 = env.storage().instance()
             .get(&DataKey::Deadline)
             .unwrap_or(0);
         if deadline == 0 {
-            panic_with_error!(&env, Error::NoDeadline);
+            panic_with_error!(&env, ContractError::NoDeadline);
         }
         if env.ledger().timestamp() > deadline {
             env.storage().instance().set(&DataKey::Status, &HuntStatus::Expired);
-            panic_with_error!(&env, Error::HuntExpired);
+            panic_with_error!(&env, ContractError::HuntExpired);
         }
 
         let radius: u32 = env.storage().instance()
@@ -143,12 +143,12 @@ impl HuntInstance {
             .unwrap_or(0);
 
         if radius == 0 {
-            panic_with_error!(&env, Error::NoRadius);
+            panic_with_error!(&env, ContractError::NoRadius);
         }
 
         let distance = Self::calculate_distance(claim_gps_lat, claim_gps_lng, hunt_lat, hunt_lng);
         if distance > radius as i64 {
-            panic_with_error!(&env, Error::NotInRadius);
+            panic_with_error!(&env, ContractError::NotInRadius);
         }
 
         env.storage().instance().set(&DataKey::Claimer, &hunter);
@@ -190,12 +190,12 @@ impl HuntInstance {
             .get(&DataKey::ClaimTimer)
             .unwrap_or(0);
         if claim_timer == 0 {
-            panic_with_error!(&env, Error::NoClaimTimer);
+            panic_with_error!(&env, ContractError::NoClaimTimer);
         }
 
         let deadline = claim_timer + CLAIM_TIMER_SECONDS;
         if env.ledger().timestamp() < deadline {
-            panic_with_error!(&env, Error::TimerNotExpired);
+            panic_with_error!(&env, ContractError::TimerNotExpired);
         }
 
         let claimer: Address = env.storage().instance()
@@ -218,7 +218,7 @@ impl HuntInstance {
             .get(&DataKey::Status)
             .unwrap_or(HuntStatus::Expired);
         if status != HuntStatus::Disputed {
-            panic_with_error!(&env, Error::NotActive);
+            panic_with_error!(&env, ContractError::NotActive);
         }
 
         let mut vote_hashes: Vec<(Address, BytesN<32>)> = env.storage().instance()
@@ -235,12 +235,12 @@ impl HuntInstance {
             .get(&DataKey::VoteHashes)
             .unwrap_or(Vec::new(&env));
 
-        let computed_hash = env.crypto().sha256(&(verifier.clone(), vote, salt).into_val(&env));
+        let computed_hash: BytesN<32> = env.crypto().sha256(&(verifier.clone(), vote, salt).to_xdr(&env)).into();
         let found = vote_hashes.iter().any(|(addr, hash)| {
             addr == verifier && hash == computed_hash
         });
         if !found {
-            panic_with_error!(&env, Error::InvalidVote);
+            panic_with_error!(&env, ContractError::InvalidVote);
         }
 
         let mut votes: Vec<(Address, bool)> = env.storage().instance()
@@ -256,10 +256,10 @@ impl HuntInstance {
             .unwrap_or(Vec::new(&env));
 
         if votes.is_empty() {
-            panic_with_error!(&env, Error::NoVotes);
+            panic_with_error!(&env, ContractError::NoVotes);
         }
 
-        let approve_count = votes.iter().filter(|(_, v)| *v).count();
+        let approve_count = votes.iter().filter(|(_, v)| *v).count() as u32;
         let reject_count = votes.len() - approve_count;
 
         if approve_count >= 2 {
@@ -269,7 +269,7 @@ impl HuntInstance {
             env.storage().instance().set(&DataKey::Status, &HuntStatus::Active);
             env.storage().instance().set(&DataKey::DisputeResolution, &BytesN::from_array(&env, &[0u8; 32]));
         } else {
-            panic_with_error!(&env, Error::NotEnoughVotes);
+            panic_with_error!(&env, ContractError::NotEnoughVotes);
         }
 
         let hunter_wins = approve_count >= 2;
@@ -283,17 +283,17 @@ impl HuntInstance {
             .get(&DataKey::Status)
             .unwrap_or(HuntStatus::Expired);
         if status != HuntStatus::Active {
-            panic_with_error!(&env, Error::NotActive);
+            panic_with_error!(&env, ContractError::NotActive);
         }
 
         let deadline: u64 = env.storage().instance()
             .get(&DataKey::Deadline)
             .unwrap_or(0);
         if deadline == 0 {
-            panic_with_error!(&env, Error::NoDeadline);
+            panic_with_error!(&env, ContractError::NoDeadline);
         }
         if env.ledger().timestamp() < deadline {
-            panic_with_error!(&env, Error::HuntExpired);
+            panic_with_error!(&env, ContractError::HuntExpired);
         }
 
         env.storage().instance().set(&DataKey::Status, &HuntStatus::Expired);
@@ -343,7 +343,7 @@ impl HuntInstance {
             .get(&DataKey::Hider)
             .expect("no hider");
         if hider != &stored_hider {
-            panic_with_error!(env, Error::NotAuthorized);
+            panic_with_error!(env, ContractError::NotAuthorized);
         }
     }
 
@@ -352,6 +352,20 @@ impl HuntInstance {
         let lng_diff = (lng1 - lng2).abs();
         let lat_m = lat_diff * 111_320 / 10_000_000;
         let lng_m = lng_diff * 111_320 / 10_000_000;
-        ((lat_m * lat_m + lng_m * lng_m) as f64).sqrt() as i64
+        integer_sqrt(lat_m * lat_m + lng_m * lng_m)
     }
+}
+
+/// Integer square root (Babylonian method) — works in no_std without libm
+fn integer_sqrt(n: i64) -> i64 {
+    if n <= 0 {
+        return 0;
+    }
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    x
 }

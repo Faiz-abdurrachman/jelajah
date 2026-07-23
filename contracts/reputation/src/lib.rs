@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
 
 // ─── Storage ──────────────────────────────────────────
 
@@ -92,15 +92,15 @@ impl Reputation {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testutils"))]
 mod test {
     use super::*;
-    use soroban_sdk::Env;
+    use soroban_sdk::testutils::Address as _;
 
     #[test]
     fn test_xp_and_level() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, Reputation);
+        let contract_id = env.register(Reputation, ());
         let client = ReputationClient::new(&env, &contract_id);
 
         let user = Address::generate(&env);

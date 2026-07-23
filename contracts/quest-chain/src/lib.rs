@@ -1,13 +1,13 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
 };
 
 // ─── Error Codes ──────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
-#[contracttype]
-pub enum Error {
+#[contracterror]
+pub enum ContractError {
     QuestNotFound = 1,
     InvalidStep = 2,
     StepNotFound = 3,
@@ -57,7 +57,7 @@ impl QuestChain {
         quest_id: BytesN<32>,
         hunter: Address,
         step: u32,
-        photo_cid: BytesN<32>,
+        _photo_cid: BytesN<32>,
     ) {
         hunter.require_auth();
 
@@ -70,12 +70,12 @@ impl QuestChain {
             .unwrap_or(0);
 
         if step != current_step {
-            panic_with_error!(&env, Error::InvalidStep);
+            panic_with_error!(&env, ContractError::InvalidStep);
         }
 
         let step_exists = steps.iter().any(|s| s.step_number == step);
         if !step_exists {
-            panic_with_error!(&env, Error::StepNotFound);
+            panic_with_error!(&env, ContractError::StepNotFound);
         }
 
         let mut completed: Vec<u32> = env.storage().instance()
@@ -112,9 +112,9 @@ impl QuestChain {
             .get(&DataKey::CompletedSteps(quest_id, hunter))
             .expect("no completed steps");
 
-        let has_last = completed.iter().any(|s| *s == last_step);
+        let has_last = completed.iter().any(|s| s == last_step);
         if !has_last {
-            panic_with_error!(&env, Error::FinalStepNotCompleted);
+            panic_with_error!(&env, ContractError::FinalStepNotCompleted);
         }
     }
 

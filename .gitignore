@@ -6,6 +6,10 @@
 .env.local
 .env.*.local
 
+# Build artifacts
+target/
+contracts/target/
+
 # IDE
 .vscode/
 .idea/

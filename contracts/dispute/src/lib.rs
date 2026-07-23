@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, xdr::ToXdr, Address, BytesN, Env, Vec,
 };
 
 // ─── Constants ────────────────────────────────────────
@@ -11,8 +11,8 @@ const REQUIRED_APPEAL_VOTES: u32 = 3;
 // ─── Error Codes ──────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
-#[contracttype]
-pub enum Error {
+#[contracterror]
+pub enum ContractError {
     NotAVerifier = 1,
     InvalidReveal = 2,
     AlreadyResolved = 3,
@@ -86,12 +86,12 @@ impl Dispute {
             .expect("dispute not found");
 
         if dispute.status != 0 {
-            panic_with_error!(&env, Error::NotInVoting);
+            panic_with_error!(&env, ContractError::NotInVoting);
         }
 
         let is_verifier = dispute.verifiers.iter().any(|v| v == verifier);
         if !is_verifier {
-            panic_with_error!(&env, Error::NotAVerifier);
+            panic_with_error!(&env, ContractError::NotAVerifier);
         }
 
         dispute.votes_commit.push_back((verifier, vote_hash));
@@ -111,12 +111,12 @@ impl Dispute {
             .get(&DataKey::Dispute(dispute_id.clone()))
             .expect("dispute not found");
 
-        let computed_hash = env.crypto().sha256(&(verifier.clone(), vote, salt).into_val(&env));
+        let computed_hash: BytesN<32> = env.crypto().sha256(&(verifier.clone(), vote, salt).to_xdr(&env)).into();
         let found = dispute.votes_commit.iter().any(|(addr, hash)| {
             addr == verifier && hash == computed_hash
         });
         if !found {
-            panic_with_error!(&env, Error::InvalidReveal);
+            panic_with_error!(&env, ContractError::InvalidReveal);
         }
 
         dispute.votes_reveal.push_back((verifier, vote));
@@ -129,10 +129,10 @@ impl Dispute {
             .expect("dispute not found");
 
         if dispute.status != 0 {
-            panic_with_error!(&env, Error::AlreadyResolved);
+            panic_with_error!(&env, ContractError::AlreadyResolved);
         }
 
-        let approve_count = dispute.votes_reveal.iter().filter(|(_, v)| *v).count();
+        let approve_count = dispute.votes_reveal.iter().filter(|(_, v)| *v).count() as u32;
         let resolution = approve_count >= REQUIRED_DISPUTE_VOTES;
 
         dispute.status = 1;
@@ -171,7 +171,7 @@ impl Dispute {
         dispute_id: BytesN<32>,
         votes: Vec<(Address, bool)>,
     ) -> bool {
-        let approve_count = votes.iter().filter(|(_, v)| *v).count();
+        let approve_count = votes.iter().filter(|(_, v)| *v).count() as u32;
         let resolution = approve_count >= REQUIRED_APPEAL_VOTES;
 
         let mut dispute: DisputeData = env.storage().instance()

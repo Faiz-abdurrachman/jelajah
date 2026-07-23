@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, xdr::ToXdr, Address, BytesN, Env};
 
 mod event;
 
@@ -27,9 +27,9 @@ impl HuntFactory {
         let new_count = count + 1;
         env.storage().instance().set(&DataKey::Count, &new_count);
 
-        let hunt_id = env.crypto().sha256(
-            &(hider.clone(), new_count).into_val(&env)
-        );
+        let hunt_id: BytesN<32> = env.crypto().sha256(
+            &(hider.clone(), new_count).to_xdr(&env)
+        ).into();
 
         // Store hunt metadata
         let hunt = Hunt {
