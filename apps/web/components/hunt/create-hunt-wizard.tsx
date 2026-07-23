@@ -20,6 +20,8 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { HUNT_RULES, MAP_CONFIG } from "@/config/constants";
 import { HuntType, HUNT_TYPE_LABELS, HUNT_TYPE_DESCRIPTIONS } from "@/config/hunt-types";
 import type { HuntType as HuntTypeEnum } from "@/config/hunt-types";
+import { createHuntTx } from "@/lib/stellar/soroban";
+import { uploadToIpfs, isIpfsConfigured } from "@/lib/ipfs/pinata";
 
 // ─── Types ───────────────────────────────────────────
 
@@ -63,11 +65,13 @@ const HUNT_TYPE_OPTIONS: {
 
 export function CreateHuntWizard() {
   const router = useRouter();
-  const { isConnected, connect } = useWallet();
+  const { isConnected, connect, publicKey } = useWallet();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<HuntFormData>(INITIAL_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const updateField = <K extends keyof HuntFormData>(
     key: K,
@@ -105,10 +109,51 @@ export function CreateHuntWizard() {
       return;
     }
     setIsSubmitting(true);
-    // Placeholder: will call contract in Phase 2
-    await new Promise((r) => setTimeout(r, 1500));
-    setIsSubmitting(false);
-    setIsSuccess(true);
+    setSubmitError(null);
+
+    try {
+      // Step 1: Upload photo to IPFS (if file provided and Pinata configured)
+      let photoCid = "";
+      if (form.photoFile && isIpfsConfigured()) {
+        const ipfsResult = await uploadToIpfs(form.photoFile);
+        photoCid = ipfsResult.cid;
+      }
+
+      // Step 2: Generate clue hash (simplified — in production use SHA256)
+      const clueHashHex = Buffer.from(form.clue + photoCid)
+        .toString("hex")
+        .padEnd(64, "0")
+        .slice(0, 64);
+
+      // Step 3: Calculate deadline unix timestamp
+      const deadlineUnix = Math.floor(new Date(form.deadline).getTime() / 1000);
+
+      // Step 4: Count amount in stroops (1 XLM = 10^7 stroops; or scale from IDR)
+      const amountStroops = BigInt(Math.round(parseFloat(form.amount) * 10_000_000));
+
+      // Step 5: Call contract
+      const result = await createHuntTx(
+        publicKey!,
+        amountStroops,
+        parseFloat(form.latitude),
+        parseFloat(form.longitude),
+        parseInt(form.radius.toString(), 10),
+        deadlineUnix,
+        clueHashHex,
+        form.huntType!
+      );
+
+      if (result.success) {
+        setTxHash(result.hash || null);
+        setIsSuccess(true);
+      } else {
+        setSubmitError(result.error ?? "Gagal membuat hunt");
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Terjadi kesalahan");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ── Success Screen ──────────────────────────────────
@@ -120,9 +165,19 @@ export function CreateHuntWizard() {
           <Check className="size-10 text-primary" />
         </div>
         <h2 className="text-2xl font-bold mb-2">Hunt Berhasil Dibuat!</h2>
-        <p className="text-muted-foreground mb-8 max-w-md">
+        <p className="text-muted-foreground mb-4 max-w-md">
           Harta karunmu sudah live di peta. Hunter akan segera mencari!
         </p>
+        {txHash ? (
+          <div className="mb-6 rounded-lg bg-muted px-4 py-2 text-xs font-mono text-center break-all">
+            <span className="text-muted-foreground">Tx: </span>
+            {txHash.slice(0, 12)}...{txHash.slice(-8)}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground mb-6">
+            Transaksi disimulasikan — deploy contract untuk tx on-chain
+          </p>
+        )}
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => router.push("/map")}>
             Lihat Peta
@@ -130,10 +185,14 @@ export function CreateHuntWizard() {
           <Button onClick={() => router.push("/profile")}>
             Lihat Profile
           </Button>
-        </div>
       </div>
-    );
-  }
+
+      {submitError && (
+        <p className="mt-4 text-sm text-destructive text-center">{submitError}</p>
+      )}
+    </div>
+  );
+}
 
   return (
     <div className="max-w-2xl mx-auto">
