@@ -1,9 +1,14 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, BytesN, Env, Vec,
+    contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
 };
 
 mod event;
+
+// ─── Constants ────────────────────────────────────────
+
+/// Timer auto-release setelah hunter submit claim (24 jam dalam detik)
+const CLAIM_TIMER_SECONDS: u64 = 24 * 60 * 60;
 
 // ─── Error Codes ──────────────────────────────────────
 
@@ -21,6 +26,15 @@ pub enum Error {
     DuplicateClaim = 9,
     InvalidStep = 10,
     NotActive = 11,
+    NoDeadline = 12,
+    NoRadius = 13,
+    NoGpsCoord = 14,
+    NoClaimer = 15,
+    NoAmount = 16,
+    NoHider = 17,
+    NoClaimTimer = 18,
+    NoVotes = 19,
+    NotEnoughVotes = 20,
 }
 
 // ─── Status ───────────────────────────────────────────
@@ -32,13 +46,6 @@ pub enum HuntStatus {
     Claimed,
     Expired,
     Disputed,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[contracttype]
-pub enum Vote {
-    Approve,
-    Reject,
 }
 
 // ─── Storage ──────────────────────────────────────────
@@ -98,7 +105,6 @@ impl HuntInstance {
 
     // ── Claim ─────────────────────────────────────────
 
-    /// Hunter submit claim (GPS + foto)
     pub fn submit_claim(
         env: Env,
         hunter: Address,
@@ -108,35 +114,43 @@ impl HuntInstance {
     ) {
         hunter.require_auth();
 
-        // Validate status
-        let status: HuntStatus = env.storage().instance().get(&DataKey::Status)
+        let status: HuntStatus = env.storage().instance()
+            .get(&DataKey::Status)
             .unwrap_or(HuntStatus::Expired);
         if status != HuntStatus::Active {
-            panic!("hunt not active");
+            panic_with_error!(&env, Error::NotActive);
         }
 
-        // Validate deadline
-        let deadline: u64 = env.storage().instance().get(&DataKey::Deadline)
-            .expect("no deadline");
+        let deadline: u64 = env.storage().instance()
+            .get(&DataKey::Deadline)
+            .unwrap_or(0);
+        if deadline == 0 {
+            panic_with_error!(&env, Error::NoDeadline);
+        }
         if env.ledger().timestamp() > deadline {
             env.storage().instance().set(&DataKey::Status, &HuntStatus::Expired);
-            panic!("hunt expired");
+            panic_with_error!(&env, Error::HuntExpired);
         }
 
-        // Validate GPS radius
-        let radius: u32 = env.storage().instance().get(&DataKey::Radius)
-            .expect("no radius");
-        let hunt_lat: i64 = env.storage().instance().get(&DataKey::GpsLat)
-            .expect("no gps_lat");
-        let hunt_lng: i64 = env.storage().instance().get(&DataKey::GpsLng)
-            .expect("no gps_lng");
+        let radius: u32 = env.storage().instance()
+            .get(&DataKey::Radius)
+            .unwrap_or(0);
+        let hunt_lat: i64 = env.storage().instance()
+            .get(&DataKey::GpsLat)
+            .unwrap_or(0);
+        let hunt_lng: i64 = env.storage().instance()
+            .get(&DataKey::GpsLng)
+            .unwrap_or(0);
+
+        if radius == 0 {
+            panic_with_error!(&env, Error::NoRadius);
+        }
 
         let distance = Self::calculate_distance(claim_gps_lat, claim_gps_lng, hunt_lat, hunt_lng);
         if distance > radius as i64 {
-            panic!("not in radius");
+            panic_with_error!(&env, Error::NotInRadius);
         }
 
-        // Store claim
         env.storage().instance().set(&DataKey::Claimer, &hunter);
         env.storage().instance().set(&DataKey::ClaimPhotoCid, &photo_cid);
         env.storage().instance().set(&DataKey::ClaimTimer, &env.ledger().timestamp());
@@ -146,25 +160,24 @@ impl HuntInstance {
 
     // ── Verification ──────────────────────────────────
 
-    /// Hider approve claim
     pub fn approve(env: Env, hider: Address) {
         hider.require_auth();
-        Self::verify_hider(&env, &hider);
+        Self::require_hider(&env, &hider);
 
-        let claimer: Address = env.storage().instance().get(&DataKey::Claimer)
+        let claimer: Address = env.storage().instance()
+            .get(&DataKey::Claimer)
             .expect("no claimer");
-        let amount: i128 = env.storage().instance().get(&DataKey::Amount)
+        let amount: i128 = env.storage().instance()
+            .get(&DataKey::Amount)
             .expect("no amount");
 
         env.storage().instance().set(&DataKey::Status, &HuntStatus::Claimed);
-
         event::hunt_approved(&env, claimer, amount);
     }
 
-    /// Hider reject claim → trigger dispute
     pub fn reject(env: Env, hider: Address, reason: BytesN<32>) {
         hider.require_auth();
-        Self::verify_hider(&env, &hider);
+        Self::require_hider(&env, &hider);
 
         env.storage().instance().set(&DataKey::Status, &HuntStatus::Disputed);
         env.storage().instance().set(&DataKey::DisputeReason, &reason);
@@ -172,86 +185,91 @@ impl HuntInstance {
         event::hunt_rejected(&env, reason);
     }
 
-    /// Auto-release setelah timer habis (24 jam)
     pub fn auto_release(env: Env) {
-        let claim_timer: u64 = env.storage().instance().get(&DataKey::ClaimTimer)
-            .expect("no claim timer");
-        let deadline = claim_timer + 24 * 60 * 60; // 24 jam
-
-        if env.ledger().timestamp() < deadline {
-            panic!("timer not expired");
+        let claim_timer: u64 = env.storage().instance()
+            .get(&DataKey::ClaimTimer)
+            .unwrap_or(0);
+        if claim_timer == 0 {
+            panic_with_error!(&env, Error::NoClaimTimer);
         }
 
-        let claimer: Address = env.storage().instance().get(&DataKey::Claimer)
+        let deadline = claim_timer + CLAIM_TIMER_SECONDS;
+        if env.ledger().timestamp() < deadline {
+            panic_with_error!(&env, Error::TimerNotExpired);
+        }
+
+        let claimer: Address = env.storage().instance()
+            .get(&DataKey::Claimer)
             .expect("no claimer");
-        let amount: i128 = env.storage().instance().get(&DataKey::Amount)
+        let amount: i128 = env.storage().instance()
+            .get(&DataKey::Amount)
             .expect("no amount");
 
         env.storage().instance().set(&DataKey::Status, &HuntStatus::Claimed);
-
         event::hunt_approved(&env, claimer, amount);
     }
 
     // ── Dispute Voting ────────────────────────────────
 
-    /// Verifikator commit vote (hash)
     pub fn commit_vote(env: Env, verifier: Address, vote_hash: BytesN<32>) {
         verifier.require_auth();
 
-        let status: HuntStatus = env.storage().instance().get(&DataKey::Status)
+        let status: HuntStatus = env.storage().instance()
+            .get(&DataKey::Status)
             .unwrap_or(HuntStatus::Expired);
         if status != HuntStatus::Disputed {
-            panic!("not in dispute");
+            panic_with_error!(&env, Error::NotActive);
         }
 
-        // Store vote hash
         let mut vote_hashes: Vec<(Address, BytesN<32>)> = env.storage().instance()
-            .get(&DataKey::VoteHashes).unwrap_or(Vec::new(&env));
+            .get(&DataKey::VoteHashes)
+            .unwrap_or(Vec::new(&env));
         vote_hashes.push_back((verifier.clone(), vote_hash));
         env.storage().instance().set(&DataKey::VoteHashes, &vote_hashes);
     }
 
-    /// Verifikator reveal vote
     pub fn reveal_vote(env: Env, verifier: Address, vote: bool, salt: BytesN<32>) {
         verifier.require_auth();
 
-        // Verify hash matches
         let vote_hashes: Vec<(Address, BytesN<32>)> = env.storage().instance()
-            .get(&DataKey::VoteHashes).unwrap_or(Vec::new(&env));
+            .get(&DataKey::VoteHashes)
+            .unwrap_or(Vec::new(&env));
 
         let computed_hash = env.crypto().sha256(&(verifier.clone(), vote, salt).into_val(&env));
         let found = vote_hashes.iter().any(|(addr, hash)| {
             addr == verifier && hash == computed_hash
         });
         if !found {
-            panic!("invalid vote reveal");
+            panic_with_error!(&env, Error::InvalidVote);
         }
 
-        // Store actual vote
         let mut votes: Vec<(Address, bool)> = env.storage().instance()
-            .get(&DataKey::Votes).unwrap_or(Vec::new(&env));
+            .get(&DataKey::Votes)
+            .unwrap_or(Vec::new(&env));
         votes.push_back((verifier.clone(), vote));
         env.storage().instance().set(&DataKey::Votes, &votes);
     }
 
-    /// Execute dispute result (2-of-3)
     pub fn resolve_dispute(env: Env) {
         let votes: Vec<(Address, bool)> = env.storage().instance()
-            .get(&DataKey::Votes).expect("no votes");
+            .get(&DataKey::Votes)
+            .unwrap_or(Vec::new(&env));
+
+        if votes.is_empty() {
+            panic_with_error!(&env, Error::NoVotes);
+        }
 
         let approve_count = votes.iter().filter(|(_, v)| *v).count();
         let reject_count = votes.len() - approve_count;
 
         if approve_count >= 2 {
-            // Hunter wins
             env.storage().instance().set(&DataKey::Status, &HuntStatus::Claimed);
             env.storage().instance().set(&DataKey::DisputeResolution, &BytesN::from_array(&env, &[1u8; 32]));
         } else if reject_count >= 2 {
-            // Hider wins
             env.storage().instance().set(&DataKey::Status, &HuntStatus::Active);
             env.storage().instance().set(&DataKey::DisputeResolution, &BytesN::from_array(&env, &[0u8; 32]));
         } else {
-            panic!("not enough votes");
+            panic_with_error!(&env, Error::NotEnoughVotes);
         }
 
         let hunter_wins = approve_count >= 2;
@@ -260,25 +278,31 @@ impl HuntInstance {
 
     // ── Expiry ────────────────────────────────────────
 
-    /// Claim expired → duit balik ke hider
     pub fn claim_expired(env: Env) {
-        let status: HuntStatus = env.storage().instance().get(&DataKey::Status)
+        let status: HuntStatus = env.storage().instance()
+            .get(&DataKey::Status)
             .unwrap_or(HuntStatus::Expired);
         if status != HuntStatus::Active {
-            panic!("not active");
+            panic_with_error!(&env, Error::NotActive);
         }
 
-        let deadline: u64 = env.storage().instance().get(&DataKey::Deadline)
-            .expect("no deadline");
+        let deadline: u64 = env.storage().instance()
+            .get(&DataKey::Deadline)
+            .unwrap_or(0);
+        if deadline == 0 {
+            panic_with_error!(&env, Error::NoDeadline);
+        }
         if env.ledger().timestamp() < deadline {
-            panic!("deadline not passed");
+            panic_with_error!(&env, Error::HuntExpired);
         }
 
         env.storage().instance().set(&DataKey::Status, &HuntStatus::Expired);
 
-        let hider: Address = env.storage().instance().get(&DataKey::Hider)
+        let hider: Address = env.storage().instance()
+            .get(&DataKey::Hider)
             .expect("no hider");
-        let amount: i128 = env.storage().instance().get(&DataKey::Amount)
+        let amount: i128 = env.storage().instance()
+            .get(&DataKey::Amount)
             .expect("no amount");
 
         event::hunt_expired(&env, hider, amount);
@@ -287,7 +311,9 @@ impl HuntInstance {
     // ── Getters ───────────────────────────────────────
 
     pub fn get_status(env: Env) -> HuntStatus {
-        env.storage().instance().get(&DataKey::Status).unwrap_or(HuntStatus::Expired)
+        env.storage().instance()
+            .get(&DataKey::Status)
+            .unwrap_or(HuntStatus::Expired)
     }
 
     pub fn get_hunter(env: Env) -> Option<Address> {
@@ -299,9 +325,10 @@ impl HuntInstance {
     }
 
     pub fn get_timer_remaining(env: Env) -> u64 {
-        let claim_timer: u64 = env.storage().instance().get(&DataKey::ClaimTimer)
+        let claim_timer: u64 = env.storage().instance()
+            .get(&DataKey::ClaimTimer)
             .unwrap_or(0);
-        let deadline = claim_timer + 24 * 60 * 60;
+        let deadline = claim_timer + CLAIM_TIMER_SECONDS;
         if env.ledger().timestamp() >= deadline {
             0
         } else {
@@ -311,21 +338,18 @@ impl HuntInstance {
 
     // ── Helpers ───────────────────────────────────────
 
-    fn verify_hider(env: &Env, hider: &Address) {
-        let stored_hider: Address = env.storage().instance().get(&DataKey::Hider)
+    fn require_hider(env: &Env, hider: &Address) {
+        let stored_hider: Address = env.storage().instance()
+            .get(&DataKey::Hider)
             .expect("no hider");
         if hider != &stored_hider {
-            panic!("not authorized");
+            panic_with_error!(env, Error::NotAuthorized);
         }
     }
 
-    /// Calculate approximate distance between two GPS coordinates (Haversine).
-    /// Returns distance in meters.
     fn calculate_distance(lat1: i64, lng1: i64, lat2: i64, lng2: i64) -> i64 {
-        // Simplified: difference in degrees * 111_320 meters/degree
         let lat_diff = (lat1 - lat2).abs();
         let lng_diff = (lng1 - lng2).abs();
-        // Rough calculation: sqrt(lat_diff^2 + lng_diff^2) * 111_320
         let lat_m = lat_diff * 111_320 / 10_000_000;
         let lng_m = lng_diff * 111_320 / 10_000_000;
         ((lat_m * lat_m + lng_m * lng_m) as f64).sqrt() as i64

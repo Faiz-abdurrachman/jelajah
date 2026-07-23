@@ -1,5 +1,19 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
+};
+
+// ─── Error Codes ──────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+#[contracttype]
+pub enum Error {
+    QuestNotFound = 1,
+    InvalidStep = 2,
+    StepNotFound = 3,
+    FinalStepNotCompleted = 4,
+    NotQuestHider = 5,
+}
 
 // ─── Storage ──────────────────────────────────────────
 
@@ -31,15 +45,13 @@ pub struct QuestChain;
 
 #[contractimpl]
 impl QuestChain {
-    /// Setup quest chain steps
     pub fn set_quest_steps(env: Env, quest_id: BytesN<32>, hider: Address, steps: Vec<QuestStep>) {
         hider.require_auth();
         env.storage().instance().set(&DataKey::Steps(quest_id.clone()), &steps);
         env.storage().instance().set(&DataKey::QuestHider(quest_id.clone()), &hider);
-        env.storage().instance().set(&DataKey::QuestStatus(quest_id), &0u32); // 0=active
+        env.storage().instance().set(&DataKey::QuestStatus(quest_id), &0u32);
     }
 
-    /// Hunter complete satu step
     pub fn complete_step(
         env: Env,
         quest_id: BytesN<32>,
@@ -58,16 +70,14 @@ impl QuestChain {
             .unwrap_or(0);
 
         if step != current_step {
-            panic!("invalid step");
+            panic_with_error!(&env, Error::InvalidStep);
         }
 
-        // Verify step exists
         let step_exists = steps.iter().any(|s| s.step_number == step);
         if !step_exists {
-            panic!("step not found");
+            panic_with_error!(&env, Error::StepNotFound);
         }
 
-        // Mark step as completed
         let mut completed: Vec<u32> = env.storage().instance()
             .get(&DataKey::CompletedSteps(quest_id.clone(), hunter.clone()))
             .unwrap_or(Vec::new(&env));
@@ -77,7 +87,6 @@ impl QuestChain {
             &completed,
         );
 
-        // Move to next step
         let next_step = current_step + 1;
         env.storage().instance().set(
             &DataKey::CurrentStep(quest_id.clone(), hunter.clone()),
@@ -85,14 +94,12 @@ impl QuestChain {
         );
     }
 
-    /// Cek step hunter saat ini
     pub fn get_current_step(env: Env, quest_id: BytesN<32>, hunter: Address) -> u32 {
         env.storage().instance()
             .get(&DataKey::CurrentStep(quest_id, hunter))
             .unwrap_or(0)
     }
 
-    /// Claim quest setelah final step
     pub fn claim_quest(env: Env, quest_id: BytesN<32>, hunter: Address) {
         hunter.require_auth();
 
@@ -105,17 +112,12 @@ impl QuestChain {
             .get(&DataKey::CompletedSteps(quest_id, hunter))
             .expect("no completed steps");
 
-        // Verify last step is completed
         let has_last = completed.iter().any(|s| *s == last_step);
         if !has_last {
-            panic!("final step not completed");
+            panic_with_error!(&env, Error::FinalStepNotCompleted);
         }
-
-        // Trigger claim (in production, this calls hunt-instance)
-        // For now, mark quest as completed
     }
 
-    /// Get all quest steps
     pub fn get_steps(env: Env, quest_id: BytesN<32>) -> Vec<QuestStep> {
         env.storage().instance()
             .get(&DataKey::Steps(quest_id))

@@ -29,7 +29,7 @@ export const supabase = createClient(
 
 // ─── Helper Queries ───────────────────────────────────
 
-import type { User, Hunt, Claim, Dispute, Notification } from "@/types";
+import type { User, Hunt, Notification } from "@/types";
 
 /**
  * Get or create user by Stellar public key.

@@ -6,18 +6,16 @@ import {
   useCallback,
   useState,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import {
   getAddress,
   isConnected,
   requestAccess,
-  signTransaction,
-  getNetworkDetails,
 } from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
 import { STELLAR_CONFIG } from "@/config/constants";
-import { NETWORKS } from "@/config/constants";
 import type { WalletBalance, Transaction } from "@/types";
 
 // ─── Types ────────────────────────────────────────────
@@ -93,18 +91,82 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setPublicKey(null);
     setBalance(null);
     setTransactions([]);
+    setError(null);
   }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  // Track previous publicKey to avoid refetching same data
+  const prevPubKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!publicKey || publicKey === prevPubKey.current) return;
+    prevPubKey.current = publicKey;
+
+    const fetchData = async () => {
+      try {
+        const server = new Horizon.Server(STELLAR_CONFIG.horizonUrl);
+        const account = await server.loadAccount(publicKey);
+
+        const xlmBalance = account.balances.find(
+          (b) => b.asset_type === "native"
+        );
+        const usdcBalance = account.balances.find(
+          (b) =>
+            "asset_code" in b &&
+            b.asset_code === "USDC" &&
+            "asset_issuer" in b &&
+            b.asset_issuer ===
+              "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5ZG34P526VI"
+        );
+
+        setBalance({
+          xlm: xlmBalance?.balance ?? "0",
+          usdc: usdcBalance && "balance" in usdcBalance ? usdcBalance.balance : "0",
+        });
+      } catch {
+        setError("Gagal memuat balance");
+      }
+
+      try {
+        const server = new Horizon.Server(STELLAR_CONFIG.horizonUrl);
+        const txPage = await server
+          .transactions()
+          .forAccount(publicKey)
+          .order("desc")
+          .limit(20)
+          .call();
+
+        const txList: Transaction[] = txPage.records.map((tx) => ({
+          hash: tx.hash,
+          type: tx.successful ? "success" : "failed",
+          amount: "0",
+          asset: "XLM",
+          timestamp: tx.created_at,
+          success: tx.successful,
+        }));
+
+        setTransactions(txList);
+      } catch {
+        // Silent fail for tx history
+      }
+    };
+
+    fetchData();
+  }, [publicKey]);
+
+  // ── Manual refresh functions for UI buttons ────
 
   const refreshBalance = useCallback(async () => {
     if (!publicKey) return;
-
     try {
       const server = new Horizon.Server(STELLAR_CONFIG.horizonUrl);
       const account = await server.loadAccount(publicKey);
-
-      const xlmBalance = account.balances.find(
-        (b) => b.asset_type === "native"
-      );
+      const xlmBalance = account.balances.find((b) => b.asset_type === "native");
       const usdcBalance = account.balances.find(
         (b) =>
           "asset_code" in b &&
@@ -113,7 +175,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           b.asset_issuer ===
             "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5ZG34P526VI"
       );
-
       setBalance({
         xlm: xlmBalance?.balance ?? "0",
         usdc: usdcBalance && "balance" in usdcBalance ? usdcBalance.balance : "0",
@@ -125,7 +186,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const refreshTransactions = useCallback(async () => {
     if (!publicKey) return;
-
     try {
       const server = new Horizon.Server(STELLAR_CONFIG.horizonUrl);
       const txPage = await server
@@ -134,7 +194,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         .order("desc")
         .limit(20)
         .call();
-
       const txList: Transaction[] = txPage.records.map((tx) => ({
         hash: tx.hash,
         type: tx.successful ? "success" : "failed",
@@ -143,20 +202,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         timestamp: tx.created_at,
         success: tx.successful,
       }));
-
       setTransactions(txList);
     } catch {
-      // Silent fail for tx history
+      // Silent fail
     }
   }, [publicKey]);
-
-  // Load balance when public key changes
-  useEffect(() => {
-    if (publicKey) {
-      refreshBalance();
-      refreshTransactions();
-    }
-  }, [publicKey, refreshBalance, refreshTransactions]);
 
   return (
     <WalletContext.Provider

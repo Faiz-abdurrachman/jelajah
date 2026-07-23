@@ -4,13 +4,10 @@ import { RequireLevel } from "@/components/feature-gate";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { User, Shield, Award } from "lucide-react";
+import { User, Award } from "lucide-react";
 
 export default function ProfilePage() {
   const { isConnected, publicKey, balance } = useWallet();
-
-  const truncateKey = (key: string) =>
-    `${key.slice(0, 8)}...${key.slice(-8)}`;
 
   return (
     <RequireLevel level={1}>

@@ -1,5 +1,25 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
+};
+
+// ─── Constants ────────────────────────────────────────
+
+const REQUIRED_DISPUTE_VOTES: u32 = 2;
+const REQUIRED_APPEAL_VOTES: u32 = 3;
+
+// ─── Error Codes ──────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+#[contracttype]
+pub enum Error {
+    NotAVerifier = 1,
+    InvalidReveal = 2,
+    AlreadyResolved = 3,
+    NotInVoting = 4,
+    DisputeNotFound = 5,
+    NoDispute = 6,
+}
 
 // ─── Storage ──────────────────────────────────────────
 
@@ -21,8 +41,8 @@ pub struct DisputeData {
     pub verifiers: Vec<Address>,
     pub votes_commit: Vec<(Address, BytesN<32>)>,
     pub votes_reveal: Vec<(Address, bool)>,
-    pub status: u32, // 0=voting, 1=resolved, 2=appealed
-    pub resolution: bool, // true=hunter wins
+    pub status: u32,
+    pub resolution: bool,
     pub created_at: u64,
 }
 
@@ -33,7 +53,6 @@ pub struct Dispute;
 
 #[contractimpl]
 impl Dispute {
-    /// Create dispute (dipanggil hunt-instance saat reject)
     pub fn create_dispute(
         env: Env,
         dispute_id: BytesN<32>,
@@ -47,14 +66,13 @@ impl Dispute {
             verifiers,
             votes_commit: Vec::new(&env),
             votes_reveal: Vec::new(&env),
-            status: 0, // voting
+            status: 0,
             resolution: false,
             created_at: env.ledger().timestamp(),
         };
         env.storage().instance().set(&DataKey::Dispute(dispute_id), &dispute);
     }
 
-    /// Commit vote (hash)
     pub fn commit_vote(
         env: Env,
         dispute_id: BytesN<32>,
@@ -68,20 +86,18 @@ impl Dispute {
             .expect("dispute not found");
 
         if dispute.status != 0 {
-            panic!("not in voting phase");
+            panic_with_error!(&env, Error::NotInVoting);
         }
 
-        // Verify verifier is in the list
         let is_verifier = dispute.verifiers.iter().any(|v| v == verifier);
         if !is_verifier {
-            panic!("not a verifier");
+            panic_with_error!(&env, Error::NotAVerifier);
         }
 
         dispute.votes_commit.push_back((verifier, vote_hash));
         env.storage().instance().set(&DataKey::Dispute(dispute_id), &dispute);
     }
 
-    /// Reveal vote
     pub fn reveal_vote(
         env: Env,
         dispute_id: BytesN<32>,
@@ -95,44 +111,39 @@ impl Dispute {
             .get(&DataKey::Dispute(dispute_id.clone()))
             .expect("dispute not found");
 
-        // Verify hash
         let computed_hash = env.crypto().sha256(&(verifier.clone(), vote, salt).into_val(&env));
         let found = dispute.votes_commit.iter().any(|(addr, hash)| {
             addr == verifier && hash == computed_hash
         });
         if !found {
-            panic!("invalid reveal");
+            panic_with_error!(&env, Error::InvalidReveal);
         }
 
         dispute.votes_reveal.push_back((verifier, vote));
         env.storage().instance().set(&DataKey::Dispute(dispute_id), &dispute);
     }
 
-    /// Resolve dispute (2-of-3)
     pub fn resolve(env: Env, dispute_id: BytesN<32>) -> bool {
-        let dispute: DisputeData = env.storage().instance()
+        let mut dispute: DisputeData = env.storage().instance()
             .get(&DataKey::Dispute(dispute_id.clone()))
             .expect("dispute not found");
 
         if dispute.status != 0 {
-            panic!("already resolved");
+            panic_with_error!(&env, Error::AlreadyResolved);
         }
 
         let approve_count = dispute.votes_reveal.iter().filter(|(_, v)| *v).count();
-        let reject_count = dispute.votes_reveal.len() - approve_count;
-        let resolution = approve_count >= 2;
+        let resolution = approve_count >= REQUIRED_DISPUTE_VOTES;
 
-        let mut updated = dispute;
-        updated.status = 1;
-        updated.resolution = resolution;
-        env.storage().instance().set(&DataKey::Dispute(dispute_id), &updated);
+        dispute.status = 1;
+        dispute.resolution = resolution;
+        env.storage().instance().set(&DataKey::Dispute(dispute_id), &dispute);
 
         resolution
     }
 
-    // ── Appeal (Higher Court) ─────────────────────────
+    // ── Appeal ────────────────────────────────────────
 
-    /// Appeal dispute ke higher court
     pub fn appeal(env: Env, dispute_id: BytesN<32>, appellant: Address) {
         appellant.require_auth();
 
@@ -140,11 +151,10 @@ impl Dispute {
             .get(&DataKey::Dispute(dispute_id.clone()))
             .expect("dispute not found");
 
-        dispute.status = 2; // appealed
+        dispute.status = 2;
         env.storage().instance().set(&DataKey::Dispute(dispute_id), &dispute);
     }
 
-    /// Pilih 5 senior verifikator untuk appeal
     pub fn select_appeal_verifiers(
         env: Env,
         dispute_id: BytesN<32>,
@@ -156,14 +166,13 @@ impl Dispute {
         );
     }
 
-    /// Resolve appeal (3-of-5)
     pub fn resolve_appeal(
         env: Env,
         dispute_id: BytesN<32>,
         votes: Vec<(Address, bool)>,
     ) -> bool {
         let approve_count = votes.iter().filter(|(_, v)| *v).count();
-        let resolution = approve_count >= 3;
+        let resolution = approve_count >= REQUIRED_APPEAL_VOTES;
 
         let mut dispute: DisputeData = env.storage().instance()
             .get(&DataKey::Dispute(dispute_id.clone()))
