@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { HuntStatus } from "@/config/hunt-types";
 import type { Hunt } from "@/types";
+import { submitClaimTx } from "@/lib/stellar/soroban";
+import { uploadToIpfs, isIpfsConfigured } from "@/lib/ipfs/pinata";
 
 type ClaimPhase = "idle" | "checking" | "canClaim" | "submitting" | "pending" | "approved" | "rejected";
 
@@ -47,7 +49,7 @@ const MOCK_HUNT: Hunt = {
 };
 
 export function ClaimHuntView() {
-  const { isConnected } = useWallet();
+  const { isConnected, publicKey } = useWallet();
   const [phase, setPhase] = useState<ClaimPhase>("idle");
   const [currentPosition, setCurrentPosition] = useState<GeoPosition | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
@@ -55,6 +57,8 @@ export function ClaimHuntView() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [gpsWatchId, setGpsWatchId] = useState<number | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   const hunt = MOCK_HUNT;
 
@@ -110,10 +114,37 @@ export function ClaimHuntView() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
-    if (!photoFile || !currentPosition) return;
-    // Placeholder — will submit to contract + IPFS later
-    setPhase("pending");
+  const handleSubmit = async () => {
+    if (!photoFile || !currentPosition || !publicKey) return;
+    setClaimError(null);
+
+    try {
+      // Upload photo to IPFS (if configured)
+      let photoCidHex = "0000000000000000000000000000000000000000000000000000000000000000";
+      if (isIpfsConfigured()) {
+        const ipfsResult = await uploadToIpfs(photoFile);
+        const cidBuffer = Buffer.from(ipfsResult.cid.padEnd(64, "0").slice(0, 64));
+        photoCidHex = cidBuffer.toString("hex").padEnd(64, "0").slice(0, 64);
+      }
+
+      // Call contract
+      const result = await submitClaimTx(
+        publicKey,
+        MOCK_HUNT.contractId ?? "",
+        photoCidHex,
+        currentPosition.lat,
+        currentPosition.lng
+      );
+
+      if (result.success) {
+        setTxHash(result.hash || null);
+        setPhase("pending");
+      } else {
+        setClaimError(result.error ?? "Gagal submit claim");
+      }
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : "Terjadi kesalahan");
+    }
   };
 
   const timeRemaining = "23:45:12";
@@ -264,6 +295,9 @@ export function ClaimHuntView() {
               <Upload className="mr-2 size-4" />
               Submit Claim
             </Button>
+            {claimError && (
+              <p className="text-sm text-destructive text-center">{claimError}</p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -280,6 +314,11 @@ export function ClaimHuntView() {
             <div className="text-2xl font-mono font-bold text-primary">
               {timeRemaining}
             </div>
+            {txHash && (
+              <p className="text-xs font-mono text-muted-foreground break-all">
+                Tx: {txHash.slice(0, 12)}...{txHash.slice(-8)}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               Auto-release jika hider tidak merespon
             </p>
