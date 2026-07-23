@@ -11,7 +11,7 @@
 | **Smart Contract** | Soroban SDK (Rust) + stellar-cli | Claimable Balances, multi-sig, event streaming |
 | **Blockchain** | Stellar Testnet → Mainnet | Fee ~Rp 1, settlement <5 detik |
 | **File Storage** | Pinata / web3.storage (IPFS) | Foto referensi + bukti hunter |
-| **Database** | PostgreSQL | Metadata hunt, user profiles, cache (opsional) |
+| **Database** | Supabase (PostgreSQL managed) | Metadata hunt, user profiles, realtime subscriptions |
 | **Indexer** | Mercury / self-hosted | Listen contract events, update DB |
 | **CI/CD** | GitHub Actions + Vercel | Auto build, test, deploy |
 | **Testing** | Playwright (E2E) + cargo test (contract) | |
@@ -58,10 +58,10 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      OFF-CHAIN STORAGE                        │
 │  ┌──────────────────┐  ┌──────────────────┐                  │
-│  │  PostgreSQL      │  │  IPFS / Pinata   │                  │
+│  │  Supabase (PG)   │  │  IPFS / Pinata   │                  │
 │  │  ─ hunt metadata │  │  ─ photo hider   │                  │
 │  │  ─ user profiles │  │  ─ photo bukti   │                  │
-│  │  ─ reputation    │  │  ─ quest data    │                  │
+│  │  ─ realtime      │  │  ─ quest data    │                  │
 │  └──────────────────┘  └──────────────────┘                  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -213,8 +213,10 @@ PINATA_SECRET_KEY=xxx
 # Map
 NEXT_PUBLIC_MAPBOX_TOKEN=xxx
 
-# Database
-DATABASE_URL=postgresql://user:pass@host:5432/jelajah
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+DATABASE_URL=postgresql://user:pass@host:5432/postgres
 ```
 
 ---

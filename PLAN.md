@@ -10,55 +10,53 @@
 jelajah/
 ├── apps/
 │   └── web/                    # Next.js 16 + React 19 + TypeScript 5
-│       ├── src/
-│       │   ├── app/            # App Router: semua route L1-L7
-│       │   │   ├── page.tsx                # Landing (L1)
-│       │   │   ├── map/page.tsx            # Map view (L1)
-│       │   │   ├── hunt/
-│       │   │   │   ├── [id]/page.tsx       # Hunt detail (L2)
-│       │   │   │   ├── create/page.tsx     # Create hunt (L2)
-│       │   │   │   └── claim/page.tsx      # Claim flow (L2)
-│       │   │   ├── quest/
-│       │   │   │   └── [id]/page.tsx       # Quest chain (L3)
-│       │   │   ├── dispute/
-│       │   │   │   └── [id]/page.tsx       # Dispute flow (L3)
-│       │   │   ├── verify/page.tsx         # Verifier dashboard (L3)
-│       │   │   ├── profile/page.tsx        # Profile (L1)
-│       │   │   ├── wallet/page.tsx         # Wallet (L1)
-│       │   │   ├── brand/                  # Brand dashboard (L4)
-│       │   │   │   ├── page.tsx            # Brand landing
-│       │   │   │   └── dashboard/page.tsx  # Brand dashboard
-│       │   │   ├── leaderboard/page.tsx    # Leaderboard (L4)
-│       │   │   ├── community/page.tsx      # Community feed (L5)
-│       │   │   └── api/                    # Developer API (L7)
-│       │   ├── components/
-│       │   │   ├── ui/                     # shadcn/ui components
-│       │   │   ├── layout/                 # Navbar, Sidebar, Footer
-│       │   │   ├── map/                    # Mapbox components
-│       │   │   ├── hunt/                   # Hunt cards, forms
-│       │   │   ├── wallet/                 # Wallet connect button
-│       │   │   ├── dispute/                # Dispute UI components
-│       │   │   ├── quest/                  # Quest chain components
-│       │   │   ├── brand/                  # Brand dashboard components
-│       │   │   ├── leaderboard/            # Leaderboard components
-│       │   │   ├── community/              # Community feed components
-│       │   │   └── feature-gate/           # <RequireLevel> component
-│       │   ├── hooks/                      # Custom React hooks
-│       │   ├── lib/
-│       │   │   ├── stellar/               # Stellar SDK helpers
-│       │   │   ├── mapbox/                # Mapbox helpers
-│       │   │   ├── ipfs/                  # IPFS upload helpers
-│       │   │   └── db/                    # Database client
-│       │   ├── config/
-│       │   │   ├── constants.ts           # Magic numbers → constants
-│       │   │   ├── contracts.ts           # Contract addresses
-│       │   │   ├── levels.ts              # Level definitions
-│       │   │   └── hunt-types.ts          # Hunt type enum
-│       │   └── types/                     # TypeScript types
+│       ├── app/                # App Router: semua route L1-L7
+│       │   ├── page.tsx                # Landing (L1)
+│       │   ├── map/page.tsx            # Map view (L1)
+│       │   ├── hunt/
+│       │   │   ├── [id]/page.tsx       # Hunt detail (L2)
+│       │   │   ├── create/page.tsx     # Create hunt (L2)
+│       │   │   └── claim/page.tsx      # Claim flow (L2)
+│       │   ├── quest/
+│       │   │   └── [id]/page.tsx       # Quest chain (L3)
+│       │   ├── dispute/
+│       │   │   └── [id]/page.tsx       # Dispute flow (L3)
+│       │   ├── verify/page.tsx         # Verifier dashboard (L3)
+│       │   ├── profile/page.tsx        # Profile (L1)
+│       │   ├── wallet/page.tsx         # Wallet (L1)
+│       │   ├── brand/                  # Brand dashboard (L4)
+│       │   │   ├── page.tsx            # Brand landing
+│       │   │   └── dashboard/page.tsx  # Brand dashboard
+│       │   ├── leaderboard/page.tsx    # Leaderboard (L4)
+│       │   ├── community/page.tsx      # Community feed (L5)
+│       │   └── api/                    # Developer API (L7)
+│       ├── components/
+│       │   ├── ui/                     # shadcn/ui components
+│       │   ├── layout/                 # Navbar, Sidebar, Footer
+│       │   ├── map/                    # Mapbox components
+│       │   ├── hunt/                   # Hunt cards, forms
+│       │   ├── wallet/                 # Wallet connect button
+│       │   ├── dispute/                # Dispute UI components
+│       │   ├── quest/                  # Quest chain components
+│       │   ├── brand/                  # Brand dashboard components
+│       │   ├── leaderboard/            # Leaderboard components
+│       │   ├── community/              # Community feed components
+│       │   └── feature-gate/           # <RequireLevel> component
+│       ├── hooks/                      # Custom React hooks
+│       ├── lib/
+│       │   ├── stellar/               # Stellar SDK helpers
+│       │   ├── mapbox/                # Mapbox helpers
+│       │   ├── ipfs/                  # IPFS upload helpers
+│       │   └── supabase/              # Supabase client + queries
+│       ├── config/
+│       │   ├── constants.ts           # Magic numbers → constants
+│       │   ├── contracts.ts           # Contract addresses
+│       │   ├── levels.ts              # Level definitions
+│       │   └── hunt-types.ts          # Hunt type enum
+│       └── types/                     # TypeScript types
 │       ├── public/
-│       ├── e2e/                           # Playwright tests
+│       ├── e2e/                       # Playwright tests
 │       ├── next.config.ts
-│       ├── tailwind.config.ts
 │       ├── tsconfig.json
 │       └── package.json
 ├── contracts/                   # Rust Soroban contracts
@@ -72,9 +70,7 @@ jelajah/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml               # GitHub Actions
-├── docker-compose.yml           # PostgreSQL lokal
 ├── .env.local                   # Environment
-├── .eslintrc.json
 ├── .prettierrc
 └── README.md
 ```
@@ -89,10 +85,11 @@ jelajah/
 | 0.1 | Init Next.js 16 + TypeScript 5 strict + Tailwind CSS 4 + shadcn/ui | L1 | `feat: init next.js project with tailwind and shadcn/ui` |
 | 0.2 | Init Rust workspace with all contract stubs | L1 | `feat: init rust workspace with contract stubs` |
 | 0.3 | Setup ESLint + Prettier + TypeScript strict config | L1 | `feat: add eslint prettier and typescript strict config` |
-| 0.4 | Create full PostgreSQL schema (all tables: users, hunts, claims, disputes, verifiers, brands, notifications, api_keys) | L1 | `feat: create full database schema for all levels` |
+| 0.4 | Create full DB schema (14 tables via Supabase SQL Editor) | L1 | `feat: create full database schema for all levels` |
 | 0.5 | Create config files (constants, levels, hunt-types, contracts) | L1 | `feat: add config constants and type definitions` |
 | 0.6 | Build FeatureGate system (`<RequireLevel>` component + level config) | L1 | `feat: add feature gate system with RequireLevel component` |
 | 0.7 | Create shared UI components (layout, navbar, sidebar, footer) | L1 | `feat: add shared layout components` |
+| 0.8 | Setup Supabase client + realtime subscriptions | L1 | `feat: add supabase client with realtime support` |
 
 ### Phase 1: Smart Contracts — Write ALL (L1)
 | # | Task | Level Gate | Commit Message |
@@ -119,9 +116,9 @@ jelajah/
 | 3.2 | Mapbox integration (full-screen map, markers, clustering) | L1 | `feat: add mapbox map with markers and clustering` |
 | 3.3 | Profile page (stats, badges, hunt history) | L1 | `feat: add profile page with stats and badges` |
 | 3.4 | Wallet page (balance, tx history) | L1 | `feat: add wallet page with balance and tx history` |
-| 3.5 | Create Hunt flow (type -> clue -> GPS -> reward -> deadline -> sign) | L2 | `feat: add create hunt flow with all steps` |
+| 3.5 | Create Hunt flow (type → clue → GPS → reward → deadline → sign) | L2 | `feat: add create hunt flow with all steps` |
 | 3.6 | Hunt detail page (clue, GPS route, claim button) | L2 | `feat: add hunt detail page with gps route` |
-| 3.7 | Claim Hunt flow (GPS check -> photo -> submit -> pending) | L2 | `feat: add claim hunt flow with photo upload` |
+| 3.7 | Claim Hunt flow (GPS check → photo → submit → pending) | L2 | `feat: add claim hunt flow with photo upload` |
 | 3.8 | Quest Chain UI (step overview, progress, complete) | L3 | `feat: add quest chain ui with step progression` |
 | 3.9 | Verifier Dashboard (dispute list, vote, stake) | L3 | `feat: add verifier dashboard with dispute voting` |
 | 3.10 | Dispute UI (detail, commit-reveal, appeal) | L3 | `feat: add dispute ui with commit-reveal voting` |
@@ -137,8 +134,7 @@ jelajah/
 | 4.2 | Playwright E2E tests for main flows | L3 | `test: add playwright e2e tests` |
 | 4.3 | Mobile responsive styling | L3 | `feat: add mobile responsive styles` |
 | 4.4 | IPFS upload service (Pinata) | L2 | `feat: add ipfs upload service` |
-| 4.5 | Docker compose for local PostgreSQL | L1 | `feat: add docker compose for local postgres` |
-| 4.6 | README.md with full documentation | L1 | `docs: add comprehensive readme` |
+| 4.5 | README.md with full documentation | L1 | `docs: add comprehensive readme` |
 
 ---
 
@@ -168,23 +164,24 @@ jelajah/
 
 | Phase | Estimated Commits | Estimated Time |
 |---|---|---|
-| **Phase 0** - Foundation | 7 commits | 2-3 jam |
-| **Phase 1** - Smart Contracts | 6 commits | 4-6 jam |
-| **Phase 2** - Stellar Integration | 4 commits | 2-3 jam |
-| **Phase 3** - Frontend Pages | 14 commits | 6-8 jam |
-| **Phase 4** - Infrastructure | 6 commits | 2-3 jam |
-| **Total** | **~37 commits** | **~16-23 jam** |
+| **Phase 0** — Foundation | 8 commits | 2-3 jam |
+| **Phase 1** — Smart Contracts | 6 commits | 4-6 jam |
+| **Phase 2** — Stellar Integration | 4 commits | 2-3 jam |
+| **Phase 3** — Frontend Pages | 14 commits | 6-8 jam |
+| **Phase 4** — Infrastructure | 5 commits | 2-3 jam |
+| **Total** | **~37 commits** | **~16-22 jam** |
 
 ---
 
 ## Catatan Penting
 
-1. **Tidak ada refactor** - Semua kode ditulis untuk full architecture dari awal
-2. **Commit setiap fitur** - Bukan tiap file. 1 fitur logis = 1 commit
-3. **Jangan push** - Hanya commit lokal
-4. **Feature gate, bukan 404** - Halaman yang terkunci tampilkan `<ComingSoon>`
-5. **No `any`, no `@ts-ignore`** - Strict mode dari awal
-6. **Test sebelum commit** - Contract: `cargo test`, Frontend: TypeScript compile check
+1. **Tidak ada refactor** — Semua kode ditulis untuk full architecture dari awal
+2. **Commit setiap fitur** — Bukan tiap file. 1 fitur logis = 1 commit
+3. **Jangan push** — Hanya commit lokal
+4. **Feature gate, bukan 404** — Halaman yang terkunci tampilkan `<ComingSoon>`
+5. **No `any`, no `@ts-ignore`** — Strict mode dari awal
+6. **Test sebelum commit** — Contract: `cargo test`, Frontend: TypeScript compile check
+7. **Supabase sebagai DB layer** — PostgreSQL managed + realtime, bukan PostgreSQL lokal
 
 ---
 

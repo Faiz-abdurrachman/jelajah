@@ -128,7 +128,7 @@ Commit lokal aja. Jangan push ke remote manapun. User yang akan push nanti.
 | Smart Contract | Soroban SDK (Rust) + stellar-cli |
 | Blockchain | Stellar Testnet → Mainnet (L6) |
 | File Storage | Pinata / web3.storage (IPFS) |
-| Database | PostgreSQL (via Vercel Postgres / Supabase) |
+| Database | Supabase (PostgreSQL managed + Realtime) |
 | Indexer | Mercury / self-hosted |
 | CI/CD | GitHub Actions + Vercel |
 | Testing | Playwright (E2E) + cargo test (contract) |
@@ -208,8 +208,10 @@ PINATA_SECRET_KEY=
 # Map
 NEXT_PUBLIC_MAPBOX_TOKEN=
 
-# Database
-DATABASE_URL=postgresql://localhost:5432/jelajah
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+DATABASE_URL=postgresql://user:pass@host:5432/postgres
 ```
 
 ---
