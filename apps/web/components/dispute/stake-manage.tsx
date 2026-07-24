@@ -9,6 +9,8 @@ import { Coins, ArrowUpCircle, ArrowDownCircle, Loader2, Info } from "lucide-rea
 import { VERIFIER_RULES } from "@/config/constants";
 import { stakeTx } from "@/lib/stellar/soroban";
 
+const XLM_TO_STROOP = 10_000_000;
+
 interface StakeManageProps {
   currentStake: number;
   onStakeChange: (newStake: number) => void;
@@ -33,7 +35,8 @@ export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
     setError(null);
 
     try {
-      const prep = await stakeTx(publicKey, parsedAmount);
+      const amountStroops = BigInt(Math.round(parsedAmount * XLM_TO_STROOP));
+      const prep = await stakeTx(publicKey, amountStroops);
       if (!prep.success || !prep.xdr) {
         setError(prep.error ?? "Failed to prepare stake transaction.");
         return;
@@ -89,7 +92,7 @@ export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
             className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
               mode === "stake" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
-            onClick={() => { setMode("stake"); setError(null); }}
+            onClick={() => { setMode("stake"); setError(null); setTxHash(null); }}
           >
             <ArrowUpCircle className="size-4 inline mr-1" />
             Stake
@@ -99,7 +102,7 @@ export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
             className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
               mode === "unstake" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
-            onClick={() => { setMode("unstake"); setError(null); }}
+            onClick={() => { setMode("unstake"); setError(null); setTxHash(null); }}
             disabled={currentStake <= 0}
           >
             <ArrowDownCircle className="size-4 inline mr-1" />

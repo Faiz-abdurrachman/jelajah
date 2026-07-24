@@ -347,9 +347,9 @@ export async function appealTx(
   return prepareContractTx(pubKey, c, "appeal", args);
 }
 
-export async function stakeTx(pubKey: string, amount: number): Promise<TxResult> {
+export async function stakeTx(pubKey: string, amountStroops: bigint): Promise<TxResult> {
   const c = getDisputeContract();
   if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
-  const args: xdr.ScVal[] = [toScAddress(pubKey), toScI128(amount)];
+  const args: xdr.ScVal[] = [toScAddress(pubKey), toScI128(amountStroops)];
   return prepareContractTx(pubKey, c, "stake", args);
 }

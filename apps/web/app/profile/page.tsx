@@ -20,15 +20,16 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!publicKey) return;
+    const pk = publicKey;
 
     let cancelled = false;
 
     async function loadActivity() {
       try {
         const [huntsData, claimsData, verifierData] = await Promise.all([
-          getUserHunts(publicKey!),
-          getUserClaims(publicKey!),
-          getVerifierStats(publicKey!).catch(() => null),
+          getUserHunts(pk),
+          getUserClaims(pk),
+          getVerifierStats(pk).catch(() => null),
         ]);
         if (!cancelled) {
           setHunts(huntsData as Hunt[]);
