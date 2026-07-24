@@ -74,18 +74,7 @@ export default function DisputeDetailPage() {
         }
       } catch {
         if (!cancelled) {
-          setDispute({
-            id: parseInt(id ?? "1", 10),
-            claimId: 1,
-            reason: "Hider claims the proof photo does not match the location.",
-            status: "voting",
-            resolution: null,
-            verifiers: ["GA...AB", "GB...CD", "GC...EF"],
-            createdAt: new Date().toISOString(),
-            hunterEvidence: "ipfs://QmX...evidence",
-            hiderRejectReason: "Photo metadata shows different GPS coordinates.",
-            voteCounts: { approve: 1, reject: 1 },
-          });
+          setDispute(null);
         }
       } finally {
         if (!cancelled) setLoading(false);

@@ -26,8 +26,9 @@ export function DisputeResult({
   resolution,
   voteCounts,
 }: DisputeResultProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, signAndSubmit } = useWallet();
   const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
   const totalVotes = voteCounts ? voteCounts.approve + voteCounts.reject : 0;
   const approvePercent = totalVotes > 0 ? Math.round((voteCounts!.approve / totalVotes) * 100) : 0;
@@ -43,12 +44,23 @@ export function DisputeResult({
   const handleResolve = useCallback(async () => {
     if (!publicKey) return;
     setResolving(true);
+    setResolveError(null);
     try {
-      await resolveDisputeTx(publicKey, disputeId);
+      const prep = await resolveDisputeTx(publicKey, disputeId);
+      if (!prep.success || !prep.xdr) {
+        setResolveError(prep.error ?? "Failed to prepare resolve transaction.");
+        return;
+      }
+      const submit = await signAndSubmit(prep.xdr);
+      if (!submit.success) {
+        setResolveError(submit.error ?? "Failed to sign or submit resolve.");
+      }
+    } catch (e) {
+      setResolveError(e instanceof Error ? e.message : "Resolution failed.");
     } finally {
       setResolving(false);
     }
-  }, [publicKey, disputeId]);
+  }, [publicKey, disputeId, signAndSubmit]);
 
   return (
     <Card>
@@ -151,16 +163,21 @@ export function DisputeResult({
         )}
 
         {status === "voting" && publicKey && (
-          <Button onClick={handleResolve} disabled={resolving || totalVotes < 2} className="w-full">
-            {resolving ? (
-              <>
-                <Loader2 className="size-4 mr-2 animate-spin" />
-                Resolving...
-              </>
-            ) : (
-              "Resolve Dispute"
+          <div className="space-y-2">
+            <Button onClick={handleResolve} disabled={resolving || totalVotes < 2} className="w-full">
+              {resolving ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Resolving...
+                </>
+              ) : (
+                "Resolve Dispute"
+              )}
+            </Button>
+            {resolveError && (
+              <p className="text-sm text-destructive bg-destructive/10 rounded-md p-2">{resolveError}</p>
             )}
-          </Button>
+          </div>
         )}
       </CardContent>
     </Card>

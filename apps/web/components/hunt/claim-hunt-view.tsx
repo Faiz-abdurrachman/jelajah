@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { MapPin, Camera, CheckCircle, Clock, XCircle, AlertTriangle, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ interface ClaimHuntViewProps {
 }
 
 export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
+  const router = useRouter();
   const { isConnected, publicKey, signAndSubmit } = useWallet();
   const [phase, setPhase] = useState<ClaimPhase>("idle");
   const [currentPosition, setCurrentPosition] = useState<GeoPosition | null>(null);
@@ -370,7 +372,11 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
             <p className="text-sm text-muted-foreground">
               Foto tidak sesuai dengan referensi hider
             </p>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/verify")}
+            >
               Ajukan Dispute
             </Button>
           </CardContent>

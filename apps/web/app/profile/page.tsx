@@ -5,16 +5,17 @@ import { RequireLevel } from "@/components/feature-gate";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { User, Award, Search, Clock, CheckCircle, XCircle, MapPin } from "lucide-react";
-import { getUserHunts, getUserClaims } from "@/lib/supabase/client";
+import { User, Award, Search, Clock, CheckCircle, XCircle, MapPin, Shield } from "lucide-react";
+import { getUserHunts, getUserClaims, getVerifierStats } from "@/lib/supabase/client";
 import { getTimeAgo } from "@/lib/utils";
 import { HuntStatus } from "@/config/hunt-types";
-import type { Hunt, Claim } from "@/types";
+import type { Hunt, Claim, Verifier } from "@/types";
 
 export default function ProfilePage() {
   const { isConnected, publicKey, balance } = useWallet();
   const [hunts, setHunts] = useState<Hunt[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
+  const [verifierInfo, setVerifierInfo] = useState<Verifier | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(true);
 
   useEffect(() => {
@@ -24,13 +25,15 @@ export default function ProfilePage() {
 
     async function loadActivity() {
       try {
-        const [huntsData, claimsData] = await Promise.all([
+        const [huntsData, claimsData, verifierData] = await Promise.all([
           getUserHunts(publicKey!),
           getUserClaims(publicKey!),
+          getVerifierStats(publicKey!).catch(() => null),
         ]);
         if (!cancelled) {
           setHunts(huntsData as Hunt[]);
           setClaims(claimsData as Claim[]);
+          setVerifierInfo(verifierData as Verifier | null);
         }
       } catch {
         // Activity fetch is non-critical
@@ -107,6 +110,43 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Verifier Status */}
+            {verifierInfo && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Shield className="size-4" />
+                    Verifier Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Staked</span>
+                      <span className="text-lg font-bold font-mono">{verifierInfo.stake.toLocaleString()} XLM</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Disputes</span>
+                      <span className="text-lg font-bold">{verifierInfo.disputesHandled}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Earned</span>
+                      <span className="text-lg font-bold font-mono">{verifierInfo.disputeFeeEarned.toLocaleString()} XLM</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Status</span>
+                      <Badge
+                        variant={verifierInfo.isActive ? "default" : "secondary"}
+                        className={verifierInfo.isActive ? "bg-emerald-500 text-xs" : "text-xs"}
+                      >
+                        {verifierInfo.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Badges */}
             <Card>

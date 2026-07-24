@@ -31,6 +31,7 @@ export function QuestProgress({
   const { publicKey, signAndSubmit } = useWallet();
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   const allDone = completedSteps.length === steps.length;
   const lastStep = steps[steps.length - 1];
@@ -39,15 +40,21 @@ export function QuestProgress({
   const handleClaimQuest = useCallback(async () => {
     if (!publicKey) return;
     setClaiming(true);
+    setClaimError(null);
     try {
       const prep = await claimQuestTx(publicKey, questId);
       if (!prep.success || !prep.xdr) {
+        setClaimError(prep.error ?? "Failed to prepare claim quest tx.");
         return;
       }
       const submit = await signAndSubmit(prep.xdr);
       if (submit.success) {
         onQuestClaimed();
+      } else {
+        setClaimError(submit.error ?? "Failed to sign or submit claim quest.");
       }
+    } catch (e) {
+      setClaimError(e instanceof Error ? e.message : "Claim failed.");
     } finally {
       setClaiming(false);
     }
@@ -185,6 +192,9 @@ export function QuestProgress({
                 "Claim Reward"
               )}
             </Button>
+            {claimError && (
+              <p className="text-sm text-destructive bg-destructive/10 rounded-md p-2">{claimError}</p>
+            )}
           </CardContent>
         </Card>
       )}

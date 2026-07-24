@@ -15,7 +15,7 @@ interface AppealFormProps {
 }
 
 export function AppealForm({ disputeId, onAppealSubmitted }: AppealFormProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, signAndSubmit } = useWallet();
   const [reason, setReason] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -34,12 +34,17 @@ export function AppealForm({ disputeId, onAppealSubmitted }: AppealFormProps) {
     setError(null);
 
     try {
-      const result = await appealTx(publicKey, disputeId);
+      const prep = await appealTx(publicKey, disputeId);
+      if (!prep.success || !prep.xdr) {
+        setError(prep.error ?? "Failed to prepare appeal transaction.");
+        return;
+      }
 
-      if (result.success) {
+      const submit = await signAndSubmit(prep.xdr);
+      if (submit.success) {
         onAppealSubmitted();
       } else {
-        setError(result.error ?? "Appeal failed. Please try again.");
+        setError(submit.error ?? "Failed to sign or submit appeal.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
