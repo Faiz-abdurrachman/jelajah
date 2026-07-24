@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Coins, ArrowRight } from "lucide-react";
 import { useWallet } from "@/components/wallet/wallet-provider";
-import { getDisputes, getVerifierStats } from "@/lib/supabase/client";
+import { getDisputes, getVerifierStats, applyAsVerifier } from "@/lib/supabase/client";
 import { VERIFIER_RULES } from "@/config/constants";
 
 interface VerifierStatsData {
@@ -112,6 +112,17 @@ export default function VerifyPage() {
     handleRefresh();
   }, [handleRefresh]);
 
+  const handleApplyVerifier = useCallback(async () => {
+    if (!publicKey) return;
+    try {
+      await applyAsVerifier(publicKey);
+      setIsVerifier(true);
+      setStats({ stake: 0, disputesHandled: 0, disputeFeeEarned: 0, isActive: true });
+    } catch {
+      // silently fail — will retry on next load
+    }
+  }, [publicKey]);
+
   if (loading) {
     return (
       <RequireLevel level={3}>
@@ -176,7 +187,7 @@ export default function VerifyPage() {
                 </ul>
               </div>
 
-              <Button className="w-full" size="lg">
+              <Button className="w-full" size="lg" onClick={handleApplyVerifier}>
                 Apply to be a Verifier
               </Button>
 

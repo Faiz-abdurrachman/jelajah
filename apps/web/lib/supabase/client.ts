@@ -238,6 +238,20 @@ export async function getBrandProfile(publicKey: string) {
 }
 
 /**
+ * Register a user as a verifier.
+ */
+export async function applyAsVerifier(publicKey: string) {
+  const { data, error } = await supabase
+    .from("verifiers")
+    .insert({ public_key: publicKey, stake: 0, disputes_handled: 0, dispute_fee_earned: 0, is_active: true })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Subscribe to community activities in realtime.
  */
 export function subscribeToCommunityActivities(callback: (activity: Record<string, unknown>) => void) {

@@ -191,3 +191,11 @@ export async function appealTx(
   try { await simulateTx(pubKey, c, "appeal", args); return { hash: "", success: true, result: "Sim OK" }; }
   catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
 }
+
+export async function stakeTx(pubKey: string, amount: number): Promise<TxResult> {
+  const c = getDisputeContract();
+  if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
+  const args: xdr.ScVal[] = [toScAddress(pubKey), toScI128(amount)];
+  try { await simulateTx(pubKey, c, "stake", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}

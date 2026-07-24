@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Coins, ArrowUpCircle, ArrowDownCircle, Loader2, Info } from "lucide-react";
 import { VERIFIER_RULES } from "@/config/constants";
+import { stakeTx } from "@/lib/stellar/soroban";
 
 interface StakeManageProps {
   currentStake: number;
@@ -31,9 +32,14 @@ export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
     setError(null);
 
     try {
-      const newStake = mode === "stake" ? currentStake + parsedAmount : currentStake - parsedAmount;
-      onStakeChange(newStake);
-      setAmount("");
+      const result = await stakeTx(publicKey, parsedAmount);
+      if (result.success) {
+        const newStake = mode === "stake" ? currentStake + parsedAmount : currentStake - parsedAmount;
+        onStakeChange(newStake);
+        setAmount("");
+      } else {
+        setError(result.error ?? "Stake transaction failed.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Stake operation failed.");
     } finally {

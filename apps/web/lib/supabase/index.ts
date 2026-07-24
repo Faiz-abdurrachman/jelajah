@@ -13,6 +13,7 @@ export {
   getCommunityActivities,
   getBrandProfile,
   getHuntById,
+  applyAsVerifier,
   subscribeToCommunityActivities,
 } from "./client";
 export type { Database } from "./types";
