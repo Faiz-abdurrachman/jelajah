@@ -28,6 +28,8 @@ export function getContract(addr: string): Contract | null {
 
 export function getHuntFactory(): Contract | null { return getContract(CONTRACTS.huntFactory); }
 export function getHuntInstance(addr: string): Contract | null { return getContract(addr); }
+export function getDisputeContract(): Contract | null { return getContract(CONTRACTS.dispute); }
+export function getQuestChainContract(): Contract | null { return getContract(CONTRACTS.questChain); }
 
 export async function simulateTx(
   sourcePubKey: string, contract: Contract, method: string, args: xdr.ScVal[]
