@@ -6,6 +6,7 @@ import { RequireLevel } from "@/components/feature-gate";
 import { ClaimHuntView } from "@/components/hunt/claim-hunt-view";
 import { HiderApproveView } from "@/components/hunt/hider-approve-view";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { getHuntById } from "@/lib/supabase/client";
 import type { Hunt } from "@/types";
@@ -111,6 +112,7 @@ export default function HuntDetailPage() {
           </Card>
         ) : hunt ? (
           <div className="space-y-6">
+            <HuntInfoCard hunt={hunt} />
             {isHider && (
               <HiderApproveView hunt={hunt} onClaimResolved={handleClaimResolved} />
             )}
@@ -119,5 +121,43 @@ export default function HuntDetailPage() {
         ) : null}
       </div>
     </RequireLevel>
+  );
+}
+
+function HuntInfoCard({ hunt }: { hunt: Hunt }) {
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-bold mb-1">Hunt #{hunt.id}</h1>
+            <p className="text-sm text-muted-foreground italic">
+              &ldquo;{hunt.clue}&rdquo;
+            </p>
+          </div>
+          <Badge variant={hunt.status === "Active" ? "default" : "secondary"}>
+            {hunt.status}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <span className="text-muted-foreground">Reward: </span>
+            <span className="font-medium">
+              {hunt.amountStroops ? `${hunt.amountStroops / 10_000_000} XLM` : "N/A"}
+            </span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Radius: </span>
+            <span className="font-medium">{hunt.radiusMeters}m</span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-muted-foreground">Deadline: </span>
+            <span className="font-medium">
+              {new Date(hunt.deadline).toLocaleDateString("id-ID")}
+            </span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

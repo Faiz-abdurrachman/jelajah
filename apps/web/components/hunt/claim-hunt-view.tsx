@@ -198,41 +198,6 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Hunt Info Header */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="text-xl font-bold mb-1">Hunt #{hunt.id}</h1>
-              <p className="text-sm text-muted-foreground italic">
-                &ldquo;{hunt.clue}&rdquo;
-              </p>
-            </div>
-            <Badge variant={hunt.status === "Active" ? "default" : "secondary"}>
-              {hunt.status}
-            </Badge>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-muted-foreground">Reward: </span>
-              <span className="font-medium">
-                {hunt.amountStroops ? `${hunt.amountStroops / 10_000_000} XLM` : "N/A"}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Radius: </span>
-              <span className="font-medium">{hunt.radiusMeters}m</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-muted-foreground">Deadline: </span>
-              <span className="font-medium">
-                {new Date(hunt.deadline).toLocaleDateString("id-ID")}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* GPS Status */}
       <Card>
         <CardHeader>
