@@ -10,7 +10,7 @@ test.describe("Landing Page", () => {
     await expect(page.getByText("Hidden. Hunted. Claimed.")).toBeVisible();
 
     await expect(
-      page.getByRole("button", { name: "Connect Wallet" })
+      page.getByRole("button", { name: "Connect Wallet" }).first()
     ).toBeVisible();
   });
 
@@ -18,9 +18,8 @@ test.describe("Landing Page", () => {
     await page.goto("/");
 
     await expect(page.getByText("1. CREATE")).toBeVisible();
-    await expect(page.getByText("2. HIDE")).toBeVisible();
-    await expect(page.getByText("3. HUNT")).toBeVisible();
-    await expect(page.getByText("4. CLAIM")).toBeVisible();
+    await expect(page.getByText("2. HUNT")).toBeVisible();
+    await expect(page.getByText("3. CLAIM")).toBeVisible();
   });
 
   test("Lihat Peta button navigates to map", async ({ page }) => {
