@@ -1,7 +1,7 @@
-# JELAJAH — Handoff untuk AI Berikutnya (v3)
+# JELAJAH — Handoff untuk AI Berikutnya (v4)
 
 > **Full context transfer**. Baca SELURUH file ini sebelum nulis 1 baris kode.
-> Ini hasil dari multiple AI session. Jangan ulangi kesalahan yang udah disolve.
+> Ini hasil dari multiple AI session (4 sessions). Jangan ulangi kesalahan yang udah disolve.
 
 ---
 
@@ -29,7 +29,8 @@ Lo adalah **Senior Full-Stack + Blockchain Engineer** di project **JELAJAH** —
 | **Storage** | IPFS via Pinata |
 | **Smart Contract** | 5 Rust contracts deployed to **testnet** |
 | **Repo** | https://github.com/Faiz-abdurrachman/jelajah |
-| **Dev server** | `cd apps/web && npm run dev` → localhost:3000 |
+| **Dev server** | `cd apps/web && npm run dev` → **localhost:3001** (PORT DIGANTI — was 3000) |
+| **E2E server** | localhost:3001 (playwright config updated) |
 
 ---
 
@@ -43,12 +44,15 @@ Lo adalah **Senior Full-Stack + Blockchain Engineer** di project **JELAJAH** —
 | **NO magic numbers** | All in `config/constants.ts` |
 | **NO empty catch** | `catch(e) {}` = violation |
 | **NO `as` type cast** | Except `as const` or `satisfies` |
-| **Commit per fitur** | Conventional commit: `feat:` / `fix:` / `test:` / `docs:` |
+| **NO non-null assertion `!`** | Use guard pattern: `const pk = publicKey; if (!pk) return;` |
+| **Commit per fitur** | Conventional commit: `feat:` / `fix:` / `test:` / `docs:` / `chore:` |
 | **JANGAN `git push`** | Commit lokal aja, user yang push |
-| **Check build sebelum commit** | `tsc --noEmit` + `eslint --max-warnings=0` + `next build` |
+| **Check build sebelum commit** | `tsc --noEmit` + `eslint --max-warnings=0` + `next build` + Playwright |
 | **Feature gate** | `<RequireLevel level={N}>` — BUKAN 404 |
 | **Never import `isConnected` from Freighter v6** | See Bug #9 below |
 | **Comments: hanya yang necessary** | Algorithm explanation, workaround reason, complex pipeline |
+| **MOCK data = HARAM** | Kecuali di seed.sql yang emang buat test data |
+| **PORT = 3001** | Jangan pakai 3000 (dipakai project lain user) |
 
 ---
 
@@ -59,7 +63,7 @@ cd apps/web
 npx tsc --noEmit                     # TypeScript check
 npx eslint . --max-warnings=0        # ESLint check
 npx next build                       # Production build
-npx playwright test --project=chromium  # E2E tests (10 tests)
+npx playwright test --project=chromium  # E2E tests (10 tests, baseURL=localhost:3001)
 ```
 
 ---
@@ -72,35 +76,23 @@ eslint --max=0     ✅ 0 errors, 0 warnings
 next build         ✅ 14 routes
 @ts-ignore         ✅ 0 hits
 as any             ✅ 0 hits
-playwright         ✅ 10/10 passing (8.7s)
+non-null `!`       ✅ 0 hits
+playwright         ✅ 10/10 passing (~12s)
 git status         ✅ Clean
+dev port           ✅ 3001
 ```
 
 ---
 
-## 6. Git Log (session sebelumnya)
+## 6. Git Log (all sessions)
 
 ```
-0162cfc docs: add mobile responsive screenshots, e2e test results, and CI/CD section to README
-91e3c02 docs: add screenshots and contract transaction hash to README for submission checklist
-1f523bc docs: rewrite handoff with full session context, bug history, solutions, checkpoints, and next plan
-b7af886 test: fix e2e test selectors to match actual page content
-eae2ed3 feat: add leaflet openstreetmap fallback when mapbox token is not set
-893849e fix: skip freighter isConnected check, call requestAccess directly for v6 compatibility
-981f4ec fix: wallet provider isConnected returns object not boolean in freighter v6
-bc889a9 feat: wire quest chain contract helpers with mock fallback
-c3eb673 feat: wire brand registration and fix dashboard structural bug
-a116954 feat: wire verifier registration and stake contract call
-7822981 feat: seed supabase test data, wire hunt detail to real query, make ClaimHuntView accept hunt prop
-04f2ab0 fix: testnet completion - add missing supabase types, remove mock data, fix column mappings
-9dda51a feat: add CI/CD pipeline, playwright e2e tests, and mobile responsive audit
-2bbea0f fix: audit fixes - useEffect cleanup, dead code removal, RequireLevel consolidation, extract getTimeAgo
-84b711a fix: critical vote hash bug - compute sha256(xdr(verifier,vote,salt)) instead of raw salt
-```
-
-### Git Log (SESSION INI — 7 commits)
-
-```
+3e9ef90 chore: change dev server port from 3000 to 3001 to avoid conflict
+f7a822e fix: clear txHash on mode switch, fix stakeTx stroop conversion, remove non-null assertion
+8fd11b8 chore: add playwright-report and test-results to .gitignore
+b14eee1 fix: wire signAndSubmit to appeal/resolve, remove mock data, add error + verifier UX
+70022ae fix: wire signAndSubmit to all contract flows, decode quest steps, add profile activity
+873a8e4 docs: update HANDOFF-AI.md to v3 — full session context, 7 new commits, audit results
 db965de fix: audit — extract HuntInfoCard to page level so hider also sees hunt details
 cc6e6ae feat: seed additional test data — 5 hunts, 3 claims, 2 disputes, 3 activities
 b9885dc fix: remove generateMockSteps() — wire quest chain to real contract call
@@ -110,81 +102,43 @@ b9885dc fix: remove generateMockSteps() — wire quest chain to real contract ca
 04daa87 feat: wire claim hunt real flow — prepareContractTx + Freighter signAndSubmit + Supabase persist
 ```
 
+**Session #4 (latest):** 5 commits di atas `873a8e4` — fix signAndSubmit bugs, decode quest steps, UX polish, audit fixes, port change.
+
 ---
 
 ## 7. 🐛 ALL BUGS SOLVED — Root Cause + Solution
 
-### Bugs From Previous Sessions
+### Bugs From Previous Sessions (#1–#18)
 
-### Bug #1: Contract `panic!("string")` (17x)
-- **Root cause**: String literal instead of `panic_with_error!` macro
-- **Fix**: Replace all `panic!("...")` → `panic_with_error!(&env, Error::Variant)`
-- **Files**: All 5 contract `lib.rs` files
+> Lihat `HANDOFF-AI.md` v3 untuk bug #1–#18. File lama ada di git history (`873a8e4`).
+> Ringkasan: contract panic, magic numbers, wallet cascade render, Soroban SDK 27, gitignore, secrets, unused deps, error auto-clear, commit-reveal hash, Freighter isConnected, Mapbox token, useEffect pattern, supabase types, column names, TransactionBuilder vs Transaction, Freighter address key, contract ID varchar, hider info visibility.
 
-### Bug #2: Magic number `24 * 60 * 60` (2x)
-- **Fix**: Extract to `const CLAIM_TIMER_SECONDS: u64`
+### Bugs From Session #4 (THIS SESSION)
 
-### Bug #3: Wallet cascade render
-- **Root cause**: `setState` in `useEffect` without proper guards
-- **Fix**: `useRef` guard for `prevPubKey`
+### Bug #19: 🔴 Missing `signAndSubmit` di 4 komponen (CRITICAL)
+- **Root cause**: `prepareContractTx` returns XDR (unsigned transaction blob), but 4 components treated `result.success === true` as "tx submitted to network". Freighter never called.
+- **Impact**: Dispute votes, stakes, quest steps, quest claims — semua gak pernah beneran ke-submit ke blockchain. UX nunjukin "success" padahal cuma XDR yang berhasil di-assemble.
+- **Fix**: Tambah `signAndSubmit(prep.xdr)` setelah `prepareContractTx` di semua 4 komponen. Baru update state/phase setelah `signAndSubmit` sukses.
+- **Files**: `vote-panel.tsx` (commitVoteTx + revealVoteTx), `stake-manage.tsx` (stakeTx), `quest-step-view.tsx` (completeStepTx), `quest-progress.tsx` (claimQuestTx)
 
-### Bug #4: Soroban SDK 27 breaking changes
-- **Root cause**: Old SDK APIs (Error → ContractError, into_val → to_xdr, Hash<32> conversion, sqrt no_std)
-- **Fix**: Multiple API updates across all contracts
+### Bug #20: 🔴 Missing `signAndSubmit` di appeal-form.tsx
+- **Root cause**: Same as #19 — `appealTx()` returns XDR, never signed.
+- **Fix**: Add `signAndSubmit(prep.xdr)`.
 
-### Bug #5: `contracts/target/` in git
-- **Fix**: Add to `.gitignore`, `git rm --cached`
+### Bug #21: 🔴 Missing `signAndSubmit` di dispute-result.tsx
+- **Root cause**: Same as #19 — `resolveDisputeTx()` returns XDR, never signed.
+- **Fix**: Add `signAndSubmit(prep.xdr)` + resolveError display.
 
-### Bug #6: Secrets in HANDOFF-AI.md history
-- **Fix**: `git filter-branch` to remove from all commits
+### Anomaly A1: `txHash` tidak di-clear saat switch mode (stake-manage)
+- **Root cause**: `setTxHash(null)` gak dipanggil di handler switch stake ↔ unstake
+- **Fix**: Added `setTxHash(null)` in mode switch handlers
 
-### Bug #7: `@creit.tech/stellar-wallets-kit` 30MB unused
-- **Fix**: `npm uninstall`
+### Anomaly A2: `stakeTx` stroop/XLM unit mismatch (BUG)
+- **Root cause**: `stakeTx(publicKey, amount: number)` passing raw number ke `toScI128()`. User input "1" (maksudnya 1 XLM) jadi 1 stroop (0.0000001 XLM).
+- **Fix**: Changed signature to `stakeTx(pubKey, amountStroops: bigint)` matching `createHuntTx` convention. Caller in stake-manage.tsx now converts `parsedAmount * 10_000_000`.
 
-### Bug #8: Error state not auto-cleared
-- **Fix**: Auto-clear after 5s via `useEffect` cleanup
-
-### Bug #9: 🔴 CRITICAL — Commit-Reveal Vote Hash
-- **Root cause**: `isConnected()` in Freighter v6 returns `{ isConnected: object }`, not `boolean`. JS passed raw salt as `vote_hash`, but contract computes `sha256(xdr_encode(verifier, vote, salt))`. Hash mismatch = `InvalidReveal` every time.
-- **Fix**: 
-  1. Skip `isConnected()` entirely — call `requestAccess()` directly
-  2. Add `computeVoteHash()` using `xdr.ScVal.scvVec()` + Web Crypto `sha256`
-  3. 32-byte salt (not 16-byte) for `BytesN<32>` compatibility
-
-### Bug #10: Freighter Wallet Connect not working
-- **Root cause**: `isConnected()` returns `{ isConnected: window.freighter }` (API object = always truthy). So `requestAccess()` was never triggered.
-- **Fix**: Skip `isConnected()` call. Call `requestAccess()` directly, fallback to `getAddress()` if already authorized.
-- **NEVER import `isConnected` from Freighter v6 again.**
-
-### Bug #11: Mapbox token empty — map not showing
-- **Fix**: Added Leaflet + OpenStreetMap fallback (free, no token). Component in `components/map/leaflet-fallback.tsx`, dynamically imported with `ssr: false`.
-
-### Bug #12: `brandRowToData` inserted inside useEffect
-- **Fix**: Rewrote entire file, moved function to module level
-
-### Bug #13: Supabase types only 7/17 tables
-- **Fix**: Added all 17 tables to `lib/supabase/types.ts`
-
-### Bug #14: Community activities wrong column names
-- **Fix**: Updated mapping in `activity-feed.tsx` to use correct columns
-
-### Bugs From Session Ini
-
-### Bug #15: 🔴 `prepareContractTx` — `TransactionBuilder.toXDR()` doesn't exist
-- **Root cause**: `rpc.assembleTransaction()` returns `TransactionBuilder`, not `Transaction`. Cannot call `.toXDR()` directly.
-- **Fix**: `assembled.build().toEnvelope().toXDR("base64")` — build first, then get envelope XDR.
-
-### Bug #16: 🔴 Freighter `signTransaction` — wrong option key
-- **Root cause**: Used `accountToSign` but Freighter v6 expects `address`.
-- **Fix**: `signTransaction(xdr, { networkPassphrase, address: publicKey })`
-
-### Bug #17: 🔴 Contract ID seed data — varchar(56) too long
-- **Root cause**: Fake contract IDs exceeded 56 character limit or duplicated existing keys.
-- **Fix**: Used unique 56-char IDs with consistent prefix, inserted one at a time.
-
-### Bug #18: 🔴 Audit — Hider gak lihat info hunt
-- **Root cause**: `hunt/[id]/page.tsx` conditionally showed HiderApproveView XOR ClaimHuntView. Hider saw no hunt info (clue, reward, GPS).
-- **Fix**: Extracted `HuntInfoCard` to page level, shown for both hider and hunter. ClaimHuntView no longer duplicates the header.
+### Anomaly A3: `publicKey!` non-null assertion (profile/page.tsx)
+- **Fix**: Replaced with guard pattern: `const pk = publicKey; if (!pk) return;`
 
 ---
 
@@ -205,7 +159,7 @@ b9885dc fix: remove generateMockSteps() — wire quest chain to real contract ca
 | Table | Count | Notes |
 |---|---|---|
 | users | 3 | Budi Hunter (2500xp), Sita Hider (1200xp), Veri Master (5000xp) |
-| hunts | 8 | GPS Monas, Puzzle HI, Quest Jakarta + 5 new (jembatan, cipher, taman, quest 3-step, photo jumping) |
+| hunts | 8 | GPS Monas, Puzzle HI, Quest Jakarta + 5 new |
 | claims | 4 | 3 pending, 1 approved |
 | disputes | 3 | 2 voting, 1 resolved |
 | verifiers | 2 | Veri Master, Budi Hunter |
@@ -218,51 +172,51 @@ Seed SQL: `apps/web/lib/supabase/seed.sql`
 
 ## 10. Routes & Status (14 routes)
 
-### ✅ REAL DATA + REAL TX FLOW
-| Route | Level | Status | Details |
-|---|---|---|---|
-| `/` | L1 | ✅ | Static landing |
-| `/map` | L1 | ✅ | Leaflet OSM + Supabase markers |
-| `/profile` | L1 | ✅ | Supabase user |
-| `/wallet` | L1 | ✅ | Horizon API real |
-| `/hunt/[id]` | L2 | ✅ | Supabase hunt + ClaimHuntView (real tx via signAndSubmit) + HiderApproveView (approve/reject) |
-| `/hunt/create` | L2 | ✅ | 7-phase flow: IPFS → prepareContractTx → signAndSubmit → insertHunt |
-| `/leaderboard` | L4 | ✅ | Supabase users ranked |
-| `/community` | L5 | ✅ | Supabase activities + realtime |
-| `/brand` | L4 | ✅ | Register + dashboard |
+### ✅ REAL DATA + REAL TX FLOW (siap test dengan wallet asli)
+| Route | Level | Status |
+|---|---|---|
+| `/` | L1 | ✅ Static landing |
+| `/map` | L1 | ✅ Leaflet OSM + Supabase markers |
+| `/profile` | L1 | ✅ Supabase user + Activity section (hunts + claims) + Verifier card |
+| `/wallet` | L1 | ✅ Horizon API real |
+| `/hunt/[id]` | L2 | ✅ HuntInfoCard + ClaimHuntView (signAndSubmit OK) + HiderApproveView |
+| `/hunt/create` | L2 | ✅ 7-phase: IPFS → prepareContractTx → signAndSubmit → insertHunt |
+| `/leaderboard` | L4 | ✅ Supabase users ranked |
+| `/community` | L5 | ✅ Supabase activities + realtime |
+| `/brand` | L4 | ✅ Register + dashboard |
+| `/brand/dashboard` | L4 | ✅ Campaign create → Supabase |
 
-### ⚠️ UI WORKS, TX NEEDS CONTRACT DATA
-| Route | Level | Status | Issue |
+### ⚠️ UI COMPLETE, TX WIRED — PERNAH DI-TEST DENGAN WALLET ASLI?
+| Route | Level | Status | Note |
 |---|---|---|---|
-| `/quest/[id]` | L3 | ⚠️ | Contract wired, `generateMockSteps()` removed. Shows "belum tersedia on-chain" — needs contract to have real step data |
-| `/verify` | L3 | ⚠️ | Apply verifier works (Supabase). Vote panel commit-reveal wired via prepareContractTx. **Never tested with real sign flow** |
-| `/dispute/[id]` | L3 | ⚠️ | UI complete, contract wired. **Never tested with real sign flow** |
+| `/quest/[id]` | L3 | ⚠️ | signAndSubmit wired. Contract helper decode ScVal OK. Butuh `setQuestStepsTx` untuk seed data. |
+| `/verify` | L3 | ⚠️ | VotePanel + StakeManage signAndSubmit wired. applyAsVerifier works (Supabase). Belum test real Freighter. |
+| `/dispute/[id]` | L3 | ⚠️ | AppealForm + DisputeResult signAndSubmit wired. Mock data removed. Belum test real Freighter. |
 | `/settings` | L3 | ✅ | localStorage |
-| `/brand/dashboard` | L4 | ✅ | Campaign create persists to Supabase via createCampaign() |
 
 ---
 
-## 11. What DONE This Session (Real Flow End-to-End)
+## 11. What DONE (End-to-End Real Flow)
 
 | Flow | Status |
 |---|---|
-| Create Hunt → prepare tx → Freighter sign → submit → Supabase persist | ✅ Done |
-| Claim Hunt → GPS → photo upload (IPFS) → prepare tx → Freighter sign → submit → Supabase persist | ✅ Done |
-| Hider approve/reject claim → Supabase updateClaimStatus | ✅ Done |
-| Campaign create → Supabase createCampaign | ✅ Done |
-| Quest chain — remove generateMockSteps, wire contract call | ✅ Done |
-| Seed data: 8 hunts, 4 claims, 3 disputes, 8 activities | ✅ Done |
-| Hunt info card visible for both hider and hunter | ✅ Fixed (audit) |
-
-### What NOT DONE — Needs Real Wallet + Testnet
-
-| Flow | Status |
-|---|---|
-| Dispute → commit vote → reveal vote → resolve | ⚠️ Wired, not tested with real sign |
-| Stake via contract | ⚠️ Wired, not tested with real sign |
-| Quest chain complete_step → claim_quest | ⚠️ Wired, contract needs step data |
-| getQuestStepsTx / getCurrentStepTx — decode result from contract | ❌ Returns "Sim OK" — contract needs real data |
-| Mainnet migration (L6) | ❌ Not started |
+| Create Hunt → prepare tx → Freighter sign → submit → Supabase persist | ✅ |
+| Claim Hunt → GPS → IPFS → prepare tx → Freighter sign → submit → Supabase persist | ✅ |
+| Hider approve/reject → Supabase updateClaimStatus | ✅ |
+| Campaign create → Supabase createCampaign | ✅ |
+| Dispute commit vote → prepare tx → Freighter sign → submit | ✅ CODENYA, belum test wallet |
+| Dispute reveal vote → prepare tx → Freighter sign → submit | ✅ CODENYA, belum test wallet |
+| Dispute resolve → prepare tx → Freighter sign → submit | ✅ CODENYA, belum test wallet |
+| Dispute appeal → prepare tx → Freighter sign → submit | ✅ CODENYA, belum test wallet |
+| Stake → prepare tx → Freighter sign → submit (stroop conversion fixed) | ✅ CODENYA, belum test wallet |
+| Quest complete step → prepare tx → Freighter sign → submit | ✅ CODENYA, belum test wallet |
+| Quest claim → prepare tx → Freighter sign → submit | ✅ CODENYA, belum test wallet |
+| Quest steps decode from ScVal | ✅ Helper ready |
+| Quest steps seed (setQuestStepsTx) | ✅ Helper ready, butuh dipanggil |
+| Profile activity (hunts created + claims submitted) | ✅ |
+| Profile verifier status (stake, disputes, earnings) | ✅ |
+| Hunt detail hider info card | ✅ |
+| pollTx updates UI | ✅ |
 
 ---
 
@@ -273,151 +227,140 @@ jelajah/
 ├── apps/web/
 │   ├── app/                          # 14 routes
 │   │   ├── page.tsx                  # Landing
-│   │   ├── map/page.tsx              # Map (Leaflet OSM fallback)
-│   │   ├── profile/page.tsx          # Profile
+│   │   ├── map/page.tsx              # Map (Leaflet OSM)
+│   │   ├── profile/page.tsx          # Profile → Activity + Verifier card
 │   │   ├── wallet/page.tsx           # Wallet + balance
 │   │   ├── hunt/
-│   │   │   ├── create/page.tsx       # Create wizard (7-phase real tx)
-│   │   │   └── [id]/page.tsx         # Hunt detail → HuntInfoCard + ClaimHuntView/HiderApproveView
-│   │   ├── quest/[id]/page.tsx       # Quest chain (contract wired, no mock)
-│   │   ├── verify/page.tsx           # Verifier dashboard
-│   │   ├── dispute/[id]/page.tsx     # Dispute detail
+│   │   │   ├── create/page.tsx       # Create wizard (signAndSubmit)
+│   │   │   └── [id]/page.tsx         # HuntInfoCard + ClaimHuntView/HiderApproveView
+│   │   ├── quest/[id]/page.tsx       # Quest chain (decoded ScVal)
+│   │   ├── verify/page.tsx           # Verifier dashboard (VotePanel + StakeManage)
+│   │   ├── dispute/[id]/page.tsx     # Dispute detail (AppealForm + DisputeResult)
 │   │   ├── settings/page.tsx         # Settings
 │   │   ├── brand/page.tsx            # Brand landing
 │   │   ├── brand/dashboard/page.tsx  # Brand dashboard
 │   │   ├── leaderboard/page.tsx      # Leaderboard
 │   │   └── community/page.tsx        # Community feed
 │   ├── components/
-│   │   ├── ui/                       # shadcn/ui
-│   │   ├── layout/navbar.tsx         # Navbar with feature-gated links
-│   │   ├── map/
-│   │   │   ├── hunt-map.tsx          # Mapbox + Leaflet fallback
-│   │   │   └── leaflet-fallback.tsx  # OSM map (ssr:false)
 │   │   ├── hunt/
-│   │   │   ├── create-hunt-wizard.tsx # 6-step → 7-phase real tx
-│   │   │   ├── claim-hunt-view.tsx    # GPS + photo + 4-phase tx
-│   │   │   └── hider-approve-view.tsx # NEW: approve/reject claims
+│   │   │   ├── create-hunt-wizard.tsx # signAndSubmit wired ✅
+│   │   │   ├── claim-hunt-view.tsx    # signAndSubmit + pollTx + "Ajukan Dispute" ✅
+│   │   │   └── hider-approve-view.tsx # approve/reject claims (ESLint fixed) ✅
 │   │   ├── quest/
-│   │   │   ├── quest-progress.tsx     # Step timeline
-│   │   │   └── quest-step-view.tsx    # Per-step GPS+photo
+│   │   │   ├── quest-progress.tsx     # signAndSubmit + error display ✅
+│   │   │   └── quest-step-view.tsx    # signAndSubmit + error display ✅
 │   │   ├── dispute/
-│   │   │   ├── dispute-list.tsx, dispute-result.tsx
-│   │   │   ├── vote-panel.tsx         # Commit-reveal (wired to prepareContractTx)
-│   │   │   ├── stake-manage.tsx       # Stake form (wired)
-│   │   │   ├── verifier-stats.tsx
-│   │   │   └── appeal-form.tsx
-│   │   ├── brand/
-│   │   │   ├── brand-dashboard.tsx
-│   │   │   └── campaign-create.tsx    # Persists to Supabase
-│   │   ├── leaderboard/
-│   │   │   └── leaderboard-table.tsx
-│   │   ├── community/
-│   │   │   ├── activity-feed.tsx
-│   │   │   └── notification-bell.tsx
-│   │   ├── wallet/
-│   │   │   └── wallet-provider.tsx    # Freighter v6 + signAndSubmit
-│   │   └── feature-gate/
-│   │       └── require-level.tsx
+│   │   │   ├── vote-panel.tsx         # signAndSubmit + txHash display ✅
+│   │   │   ├── stake-manage.tsx       # signAndSubmit + stroop fix + txHash clear ✅
+│   │   │   ├── appeal-form.tsx        # signAndSubmit ✅
+│   │   │   └── dispute-result.tsx     # signAndSubmit + resolveError ✅
+│   │   └── ...
 │   ├── config/
-│   │   ├── constants.ts               # All magic numbers
-│   │   ├── contracts.ts               # Contract addresses
-│   │   ├── levels.ts                  # Feature gate definitions
-│   │   └── hunt-types.ts              # HuntType enum
+│   │   ├── constants.ts
+│   │   ├── contracts.ts
+│   │   ├── levels.ts
+│   │   └── hunt-types.ts
 │   ├── lib/
-│   │   ├── stellar/soroban.ts         # prepareContractTx + signAndSubmit + all contract helpers
-│   │   ├── ipfs/pinata.ts             # IPFS upload
+│   │   ├── stellar/soroban.ts         # ALL prepareContractTx helpers + setQuestStepsTx + ScVal decode
+│   │   ├── ipfs/pinata.ts
 │   │   ├── supabase/
-│   │   │   ├── client.ts              # All queries + write helpers (insertHunt, insertClaim, etc.)
-│   │   │   ├── types.ts               # 17/17 tables typed
-│   │   │   ├── schema.sql             # Full schema
-│   │   │   └── seed.sql               # NEW: reproducible seed data
-│   │   └── utils.ts                   # cn(), getTimeAgo()
-│   ├── types/index.ts                 # Shared TypeScript types
-│   ├── e2e/                           # Playwright tests (10 passing)
-│   └── playwright.config.ts
-├── contracts/                         # 5 Rust Soroban contracts
-├── .github/workflows/ci.yml           # CI/CD: tsc → eslint → build
-├── docs/                              # Dokumentasi (8 files)
-└── .env.local                         # Environment variables
+│   │   │   ├── client.ts              # getUserHunts, getUserClaims, getVerifierStats, etc.
+│   │   │   ├── types.ts
+│   │   │   ├── schema.sql
+│   │   │   └── seed.sql
+│   │   └── utils.ts
+│   ├── types/index.ts                # QuestStep, Hunt, Claim, Verifier, etc.
+│   ├── e2e/                          # 10 Playwright tests
+│   └── playwright.config.ts          # PORT 3001
+├── contracts/                        # 5 Rust Soroban contracts
+├── .github/workflows/ci.yml
+└── .env.local
 ```
 
 ---
 
-## 13. Key Files to Read First
+## 13. Key Files — Must Read First
 
 | Priority | File | Why |
 |---|---|---|
-| 1 | `lib/stellar/soroban.ts` | `prepareContractTx` → build/simulate/assemble XDR. `submitSignedTx` for RPC. All mutation helpers use prepareContractTx. Read-only helpers (getQuestSteps, getCurrentStep) still use simulateTx. |
-| 2 | `lib/supabase/client.ts` | All Supabase queries + write helpers: insertHunt, insertClaim, updateClaimStatus, createCampaign, getPendingClaims, getClaimsByHunt |
+| 1 | `lib/stellar/soroban.ts` | ALL prepareContractTx helpers + setQuestStepsTx + ScVal decode. 11 contract functions. |
+| 2 | `lib/supabase/client.ts` | getUserClaims, getUserHunts, getVerifierStats, insertHunt, insertClaim, etc. |
 | 3 | `components/wallet/wallet-provider.tsx` | Freighter v6 + `signAndSubmit(xdr)` — sign via Freighter → submit to RPC |
 | 4 | `config/constants.ts` | All rules, fees, thresholds |
-| 5 | `config/contracts.ts` | Contract addresses (from .env.local) |
-| 6 | `types/index.ts` | Shared types |
-| 7 | `components/hunt/claim-hunt-view.tsx` | 4-phase flow: IPFS → prepareContractTx → signAndSubmit → insertClaim |
-| 8 | `components/hunt/hider-approve-view.tsx` | NEW: approve/reject pending claims |
-| 9 | `app/hunt/[id]/page.tsx` | HuntInfoCard for both hider + hunter, conditional HiderApproveView or ClaimHuntView |
+| 5 | `config/contracts.ts` | Contract addresses from .env.local |
+| 6 | `types/index.ts` | QuestStep, Hunt, Claim, Verifier, etc. |
+| 7 | `playwright.config.ts` | PORT 3001 — jangan diubah ke 3000 |
 
 ---
 
-## 14. Soroban Contract Helpers (UPDATED)
+## 14. Soroban Contract Helpers (FULL — v4)
 
 ```typescript
 // lib/stellar/soroban.ts exports:
 
-// Core
+// Core — THE CRITICAL PATTERN
 prepareContractTx(pubKey, contract, method, args) → TxResult   // build → simulate → assemble → return XDR
+  // ⚠️ RETURNS XDR ONLY. MUST call signAndSubmit(xdr) after this.
+  // ⚠️ assembled.build().toEnvelope().toXDR("base64") — NOT .toXDR() directly!
 submitSignedTx(signedXdr) → TxResult                           // submit signed XDR to RPC
-simulateTx(pubKey, contract, method, args) → SimulationResult  // simulate only (for read-only calls)
-pollTx(txHash, maxAttempts?) → TxResult                        // poll for tx confirmation
+simulateTx(pubKey, contract, method, args) → SimSuccessResponse  // simulate only (read-only calls)
+pollTx(txHash, maxAttempts=30) → TxResult                      // poll for tx confirmation (2s interval)
 
-// Mutation (all use prepareContractTx — return XDR)
-createHuntTx(pubKey, amountStroops, gpsLat, gpsLng, radius, deadlineUnix, clueHashHex, huntType) → TxResult
+// Mutation (ALL use prepareContractTx — return XDR, MUST signAndSubmit after)
+createHuntTx(pubKey, amountStroops: bigint, gpsLat, gpsLng, radius, deadlineUnix, clueHashHex, huntType) → TxResult
 submitClaimTx(pubKey, instanceAddr, photoCidHex, lat, lng) → TxResult
 completeStepTx(pubKey, questIdHex, step, photoCidHex) → TxResult
 claimQuestTx(pubKey, questIdHex) → TxResult
 commitVoteTx(pubKey, disputeIdHex, voteHashHex) → TxResult
-revealVoteTx(pubKey, disputeIdHex, vote, saltHex) → TxResult
+revealVoteTx(pubKey, disputeIdHex, vote: boolean, saltHex) → TxResult
 resolveDisputeTx(pubKey, disputeIdHex) → TxResult
 appealTx(pubKey, disputeIdHex) → TxResult
-stakeTx(pubKey, amount) → TxResult
+stakeTx(pubKey, amountStroops: bigint) → TxResult              // ⚠️ amount in STROOPS (1 XLM = 10^7 stroops)
+setQuestStepsTx(pubKey, questIdHex, steps: QuestStep[]) → TxResult  // NEW v4 — seed quest data
 
-// Read-only (still use simulateTx)
-getQuestStepsTx(pubKey, questIdHex) → TxResult       // ⚠️ returns "Sim OK" — needs contract data
-getCurrentStepTx(pubKey, questIdHex) → TxResult       // ⚠️ returns "Sim OK" — needs contract data
+// Read-only (use simulateTx — returns decoded data, NOT XDR)
+getQuestStepsTx(pubKey, questIdHex) → TxResult                 // result = JSON.stringify(QuestStep[]), decoded from ScVal
+getCurrentStepTx(pubKey, questIdHex) → TxResult                // result = String(u32), decoded from ScVal
 
 // Voting
-computeVoteHash(pubKey, vote, saltHex) → Promise<string>  // MUST call before commit vote
+computeVoteHash(pubKey, vote: boolean, saltHex: string) → Promise<string>  // sha256(xdr_encode(verifier,vote,salt))
 
 // Converters
 toScAddress, toScI128, toScI64, toScU32, toScU64, toScBytesN32, toScBool, fromScVal
 
 // TxResult interface
 interface TxResult {
-  hash: string;       // tx hash after submit
+  hash: string;       // tx hash after submit (empty for prepare-only)
   success: boolean;
-  result?: string;    // human-readable
-  error?: string;     // error message
+  result?: string;    // human-readable or JSON-encoded decoded data
+  error?: string;
   xdr?: string;       // assembled XDR for Freighter signing (from prepareContractTx)
 }
 ```
 
-### TX Flow Pattern (MUST FOLLOW)
+### 🚨 CRITICAL TX FLOW — MUST FOLLOW THIS PATTERN
 
 ```typescript
-// 1. Prepare contract call → get XDR
-const prep = await createHuntTx(pubKey, ...args);
-if (!prep.success || !prep.xdr) { /* handle error */ }
+// 1. Prepare → get XDR
+const prep = await someTxFn(pubKey, ...args);
+if (!prep.success || !prep.xdr) { /* handle prep error */ return; }
 
-// 2. Sign via Freighter → submit to network → get hash
+// 2. Sign via Freighter → submit to network
 const { signAndSubmit } = useWallet();
 const submit = await signAndSubmit(prep.xdr);
-if (!submit.success) { /* handle error */ }
+if (!submit.success) { /* handle sign/submit error */ return; }
 
 // 3. Persist to Supabase (non-blocking)
-try { await insertHunt({ ...params, contractId: submit.hash }); } catch { /* on-chain already */ }
+try { await insertSomething({ ...params, txHash: submit.hash }); } catch { /* on-chain already */ }
 
-// 4. Poll for confirmation (optional, fire-and-forget)
+// 4. Poll for confirmation (optional)
 void pollTx(submit.hash);
+```
+
+### ❌ ANTI-PATTERN — NEVER DO THIS
+```typescript
+const result = await commitVoteTx(pubKey, disputeId, voteHash);
+if (result.success) { /* WRONG! Only means XDR assembled, not tx submitted */ }
 ```
 
 ---
@@ -438,82 +381,22 @@ Current: `NEXT_PUBLIC_CURRENT_LEVEL=2` in `.env.local`
 
 ---
 
-## 16. Next Plan — Prioritas
-
-### SESSION INI SUDAH KELAR:
-- ✅ ClaimHuntView → real GPS + IPFS + prepareContractTx + signAndSubmit + insertClaim
-- ✅ Hider approve/reject → HiderApproveView + updateClaimStatus
-- ✅ Create hunt real tx → prepareContractTx + signAndSubmit + insertHunt
-- ✅ Campaign persist → createCampaign ke Supabase
-- ✅ Quest chain remove mock → generateMockSteps deleted, contract wired, empty-state message
-- ✅ Seed data → 8 hunts, 4 claims, 3 disputes, 8 activities
-- ✅ Audit — HuntInfoCard extracted, hider sees hunt info
-
-### YANG BELUM — Next AI Session:
-
-**Prioritas 1: Real Sign Flow Testing**
-1. **Test dispute flow end-to-end**: commit vote → reveal vote → resolve via Freighter (prepareContractTx + signAndSubmit sudah wired, tinggal test dengan wallet asli)
-2. **Test stake flow**: stake via contract dengan Freighter signing
-3. **Test create hunt full flow**: dari wizard sampai muncul di map
-
-**Prioritas 2: Quest Chain Data**
-4. **Seed quest data ke contract**: Panggil `init_quest` atau method yang sesuai di quest-chain contract supaya `get_steps()` return data asli, bukan kosong
-5. **Decode getQuestStepsTx result**: Dari "Sim OK" → decode `ScVal` response jadi `QuestStep[]`
-
-**Prioritas 3: UX Polish**
-6. **pollTx update UI**: Setelah tx confirmed on-chain, update status di UI (bukan cuma fire-and-forget)
-7. **Hunter tracking**: Hunter bisa lihat history claim mereka (dari Supabase getUserClaims)
-
-**Prioritas 4: Mainnet (L6)**
-8. Deploy contracts ke mainnet
-9. Update semua address di `config/contracts.ts` dan `.env.local`
-10. Set `NEXT_PUBLIC_CURRENT_LEVEL=6`
-11. Security audit (terutama commit-reveal flow)
-
-### Submission Evidence (DONE)
-- ✅ 8 desktop screenshots in `public/screenshots/`
-- ✅ 6 mobile screenshots (375px) in `public/screenshots/mobile-*.png`
-- ✅ E2E tests: 10/10 passing (8.7s)
-- ✅ Transaction hash: `0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2`
-- ✅ CI/CD: `.github/workflows/ci.yml` (tsc → eslint → build)
-- ✅ Updated README with all screenshots, test results, CI/CD section
-
-### What User Must Do (can't do from terminal)
-1. **Push**: `git push origin main`
-2. **CI/CD screenshot**: After push, screenshot GitHub Actions workflow passing
-3. **Deploy Vercel**: Import repo, set env vars, deploy → get live URL
-4. **Demo video**: Record 1-2 min with Loom/OBS showing all flows
-
----
-
-## 17. Wallet Pattern (UPDATED)
+## 16. Supabase Query + Write Pattern
 
 ```tsx
-const { isConnected, publicKey, balance, connect, disconnect, signAndSubmit } = useWallet();
-
-// Connect
-await connect();
-
-// Sign + submit contract tx
-const result = await signAndSubmit(xdr);  // { hash, success, error }
-```
-
-**CRITICAL**: 
-- JANGAN import `isConnected` dari `@stellar/freighter-api`. Gunakan `requestAccess()` + `getAddress()` dari hook.
-- `signAndSubmit` internally calls `signTransaction(xdr, { networkPassphrase, address })` lalu `submitSignedTx`.
-- Semua mutation helpers di `soroban.ts` return `TxResult` dengan field `xdr` — ini yang dipassing ke `signAndSubmit`.
-
----
-
-## 18. Supabase Query Pattern (UPDATED)
-
-```tsx
-import { getActiveHunts, getHuntById, applyAsVerifier, registerBrand } from "@/lib/supabase/client";
-import { insertHunt, insertClaim, updateClaimStatus, createCampaign, getPendingClaims } from "@/lib/supabase/client";
+import { 
+  getActiveHunts, getHuntById, getUserHunts, getUserClaims,
+  applyAsVerifier, registerBrand, getVerifierStats,
+  insertHunt, insertClaim, updateClaimStatus, createCampaign,
+  getPendingClaims, getClaimsByHunt
+} from "@/lib/supabase/client";
 
 // Read
 const hunts = await getActiveHunts();
 const hunt = await getHuntById(1);
+const userHunts = await getUserHunts(publicKey);        // hunts created by user (hider)
+const userClaims = await getUserClaims(publicKey);       // claims by user (hunter)
+const verifierInfo = await getVerifierStats(publicKey);  // returns Verifier | null
 const pending = await getPendingClaims(huntId);
 
 // Write
@@ -527,18 +410,104 @@ await createCampaign({ brandPubkey, name, description, budget, startDate, endDat
 
 ---
 
-## 19. Common Pitfalls — JANGAN DIULANGI
+## 17. Wallet Pattern
 
-| Pitfall | Detail |
-|---|---|
-| `rpc.assembleTransaction(tx, sim)` | Returns `TransactionBuilder`, NOT `Transaction`. Must call `.build()` first before `.toEnvelope().toXDR("base64")` |
-| `signTransaction(xdr, { accountToSign })` | Freighter v6 uses `address`, NOT `accountToSign` |
-| Contract ID varchar(56) | Must be EXACTLY 56 chars or less |
-| `isConnected` from Freighter | Returns object `{ isConnected: window.freighter }`, always truthy. NEVER import. Use `getAddress()` instead |
-| MOCK data | ClaimHuntView no longer has MOCK_HUNT. Hunt prop is required. Page must provide it via Supabase |
-| Duplicate hunt info | HuntInfoCard lives in page. ClaimHuntView does NOT render its own header anymore |
-| `as` cast in TypeScript | Only `as const` or `satisfies` allowed. Map Supabase rows via explicit mapping, not `as` |
+```tsx
+const { isConnected, publicKey, balance, connect, disconnect, signAndSubmit } = useWallet();
+
+// Connect
+await connect();  // calls requestAccess() → getAddress() fallback
+
+// Sign + submit (THE ONLY WAY TO SEND CONTRACT TX)
+const result = await signAndSubmit(xdr);  // { hash, success, error }
+```
+
+**NEVER**: 
+- Import `isConnected` from `@stellar/freighter-api`
+- Call `signTransaction` directly — always use `signAndSubmit` from hook
+- Treat `prepareContractTx` result as "submitted"
 
 ---
 
-Good luck bro. Build JELAJAH, gak ada refactor, gak ada kerja 2 kali. Semua konteks ada di sini. 🚀
+## 18. Quest Step ScVal Encoding
+
+QuestStep Rust struct:
+```rust
+pub struct QuestStep {
+    pub step_number: u32,     // ScvVec[0] = ScvU32
+    pub clue_hash: BytesN<32>, // ScvVec[1] = ScvBytesN32
+    pub gps_lat: i64,         // ScvVec[2] = ScvI64 (value * 10^7)
+    pub gps_lng: i64,         // ScvVec[3] = ScvI64 (value * 10^7)
+    pub radius: u32,          // ScvVec[4] = ScvU32
+    pub is_final: bool,       // ScvVec[5] = ScvBool
+}
+// Vec<QuestStep> → ScvVec([ScvVec([...step1...]), ScvVec([...step2...]), ...])
+```
+
+---
+
+## 19. Next Plan — Prioritas
+
+### ✅ SUDAH KELAR (Session #4):
+- ✅ Semua 9 prepareContractTx callers wired ke signAndSubmit (vote, stake, quest step, quest claim, appeal, resolve)
+- ✅ setQuestStepsTx helper — siap dipanggil untuk seed quest data
+- ✅ getQuestStepsTx ScVal decode — return QuestStep[] sebagai JSON
+- ✅ Profile activity section (hunts created + claims submitted)
+- ✅ Profile verifier info card
+- ✅ pollTx wired ke UI
+- ✅ "Ajukan Dispute" button wired → /verify
+- ✅ Mock data dihapus dari dispute page
+- ✅ Error display di quest-progress
+- ✅ stakeTx stroop conversion fixed
+- ✅ txHash cleared on mode switch
+- ✅ non-null assertion dihilangkan
+- ✅ Port 3000 → 3001
+
+### YANG BELUM — Next AI Session:
+
+**Prioritas 1: Test dengan Wallet Asli (Freighter + Testnet)**
+1. **Test dispute flow end-to-end**: commit vote → reveal vote → resolve — code sudah wired, butuh Freighter asli
+2. **Test stake flow**: stake via contract — code sudah wired, butuh Freighter asli
+3. **Test quest chain**: complete step → claim quest — code sudah wired, butuh Freighter asli
+4. **Test create hunt full flow**: wizard → signAndSubmit → muncul di map
+
+**Prioritas 2: Quest Chain — Seed Data + Full End-to-End**
+5. **Panggil `setQuestStepsTx`**: Seed quest data ke contract (helper udah siap di soroban.ts)
+6. **Wire quest page ke getCurrentStepTx**: Tampilin current step per hunter dari contract
+7. **Test quest flow lengkap**: seed → read steps → complete step → claim
+
+**Prioritas 3: Create Dispute Flow**
+8. **Bikin `createDispute` function**: Di Supabase client + contract. Saat ini hunter cuma bisa navigate ke /verify dari "Ajukan Dispute", tapi gak ada cara bikin dispute baru.
+
+**Prioritas 4: UX Remaining**
+9. **Hunt claim history di profile**: getUserClaims udah ada, udah dipake di profile. Tapi belum ada filter/pagination.
+10. **Dispute page**: Saat ini cuma nge-link ke /verify, tapi mungkin butuh halaman list dispute per hunt.
+
+**Prioritas 5: Mainnet (L6)**
+11. Deploy contracts ke mainnet
+12. Update semua address di `config/contracts.ts` dan `.env.local`
+13. Set `NEXT_PUBLIC_CURRENT_LEVEL=6`
+14. Security audit (terutama commit-reveal flow)
+
+---
+
+## 20. Common Pitfalls — JANGAN DIULANGI
+
+| Pitfall | Detail |
+|---|---|
+| `rpc.assembleTransaction(tx, sim)` | Returns `TransactionBuilder`, NOT `Transaction`. Must `.build()` first → `.toEnvelope().toXDR("base64")` |
+| `signTransaction(xdr, { accountToSign })` | Freighter v6 uses `address`, NOT `accountToSign` |
+| Contract ID varchar(56) | Must be EXACTLY 56 chars or less |
+| `isConnected` from Freighter | Returns object, always truthy. NEVER import. Use `getAddress()` instead |
+| `prepareContractTx` return value | `result.success` = XDR assembled. NOT tx submitted. MUST call `signAndSubmit(result.xdr)` |
+| MOCK data | HARAM. Remove semua kecuali di seed.sql |
+| Port 3000 | DIPAKAI PROJECT LAIN. Selalu pakai 3001. Jangan ubah playwright config. |
+| `as` cast | Only `as const` or `satisfies`. Map Supabase rows via explicit mapping. |
+| `!` non-null assertion | HARAM. Gunakan guard pattern. |
+| Empty catch | HARAM. Minimal: `catch { /* non-critical */ }` with comment. |
+| `stakeTx` parameters | amountStroops in STROOPS (1 XLM = 10^7). Multiply by 10_000_000 before calling. |
+| Git push | JANGAN — user yang push. |
+
+---
+
+Good luck bro. Semua konteks ada di sini. Build JELAJAH, gak ada refactor, gak ada kerja 2 kali. 🚀
