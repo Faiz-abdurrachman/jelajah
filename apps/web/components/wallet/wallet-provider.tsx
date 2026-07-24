@@ -12,9 +12,11 @@ import {
 import {
   getAddress,
   requestAccess,
+  signTransaction,
 } from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
 import { STELLAR_CONFIG } from "@/config/constants";
+import { submitSignedTx, getNetworkPassphrase } from "@/lib/stellar/soroban";
 import type { WalletBalance, Transaction } from "@/types";
 
 // ─── Types ────────────────────────────────────────────
@@ -30,6 +32,7 @@ interface WalletContextValue {
   disconnect: () => void;
   refreshBalance: () => Promise<void>;
   refreshTransactions: () => Promise<void>;
+  signAndSubmit: (xdr: string) => Promise<{ hash: string; success: boolean; error?: string }>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -205,6 +208,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [publicKey]);
 
+  const signAndSubmit = useCallback(
+    async (xdr: string): Promise<{ hash: string; success: boolean; error?: string }> => {
+      if (!publicKey) {
+        return { hash: "", success: false, error: "Wallet not connected" };
+      }
+
+      const { signedTxXdr, error: signError } = await signTransaction(xdr, {
+        networkPassphrase: getNetworkPassphrase(),
+        address: publicKey,
+      });
+
+      if (signError || !signedTxXdr) {
+        return { hash: "", success: false, error: signError ?? "User rejected signing" };
+      }
+
+      const result = await submitSignedTx(signedTxXdr);
+      return result;
+    },
+    [publicKey]
+  );
+
   return (
     <WalletContext.Provider
       value={{
@@ -218,6 +242,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         disconnect,
         refreshBalance,
         refreshTransactions,
+        signAndSubmit,
       }}
     >
       {children}

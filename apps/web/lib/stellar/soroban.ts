@@ -2,7 +2,14 @@
 import { rpc, TransactionBuilder, Contract, Address, nativeToScVal, scValToNative, Networks, xdr } from "@stellar/stellar-sdk";
 import { CONTRACTS } from "@/config/contracts";
 
-export interface TxResult { hash: string; success: boolean; result?: string; error?: string; }
+export interface TxResult {
+  hash: string;
+  success: boolean;
+  result?: string;
+  error?: string;
+  /** Assembled transaction XDR — ready for Freighter signing */
+  xdr?: string;
+}
 
 let rpcServer: rpc.Server | null = null;
 
@@ -29,6 +36,65 @@ export function getHuntFactory(): Contract | null { return getContract(CONTRACTS
 export function getHuntInstance(addr: string): Contract | null { return getContract(addr); }
 export function getDisputeContract(): Contract | null { return getContract(CONTRACTS.dispute); }
 export function getQuestChainContract(): Contract | null { return getContract(CONTRACTS.questChain); }
+
+/**
+ * Build, simulate, and assemble a Soroban contract call transaction.
+ * Returns the assembled XDR ready for wallet signing.
+ */
+export async function prepareContractTx(
+  sourcePubKey: string,
+  contract: Contract,
+  method: string,
+  args: xdr.ScVal[]
+): Promise<TxResult> {
+  const server = getRpcServer();
+  const networkPassphrase = getNetworkPassphrase();
+  try {
+    const acct = await server.getAccount(sourcePubKey);
+    const tx = new TransactionBuilder(acct, {
+      fee: "1000",
+      networkPassphrase,
+    })
+      .addOperation(contract.call(method, ...args))
+      .setTimeout(30)
+      .build();
+
+    const sim = await server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) {
+      return { hash: "", success: false, error: "Simulation failed: " + JSON.stringify(sim) };
+    }
+    if (!rpc.Api.isSimulationSuccess(sim)) {
+      return { hash: "", success: false, error: "Unknown simulation response" };
+    }
+
+    // Assemble the transaction with simulation results (footers, fees, etc.)
+    const assembled = rpc.assembleTransaction(tx, sim);
+    const builtTx = assembled.build();
+    const xdrStr = builtTx.toEnvelope().toXDR("base64") as string;
+
+    return { hash: "", success: true, xdr: xdrStr, result: "Prepared — ready to sign" };
+  } catch (e) {
+    return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed to prepare tx" };
+  }
+}
+
+/**
+ * Submit a signed transaction XDR to the network.
+ * Returns the transaction hash.
+ */
+export async function submitSignedTx(signedXdr: string): Promise<TxResult> {
+  const server = getRpcServer();
+  try {
+    const tx = TransactionBuilder.fromXDR(signedXdr, getNetworkPassphrase());
+    const result = await server.sendTransaction(tx);
+    if (result.status === "ERROR") {
+      return { hash: "", success: false, error: result.errorResult?.result()?.toString() ?? "Submit failed" };
+    }
+    return { hash: result.hash, success: true, result: "Submitted" };
+  } catch (e) {
+    return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed to submit tx" };
+  }
+}
 
 export async function simulateTx(
   sourcePubKey: string, contract: Contract, method: string, args: xdr.ScVal[]
@@ -102,8 +168,7 @@ export async function createHuntTx(
     toScU32(radius), toScU64(BigInt(deadlineUnix)),
     toScBytesN32(clueHashHex), toScU32(huntType),
   ];
-  try { await simulateTx(pubKey, c, "create_hunt", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "create_hunt", args);
 }
 
 export async function submitClaimTx(
@@ -116,8 +181,7 @@ export async function submitClaimTx(
     toScI64(BigInt(Math.round(lat * 10_000_000))),
     toScI64(BigInt(Math.round(lng * 10_000_000))),
   ];
-  try { await simulateTx(pubKey, c, "submit_claim", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "submit_claim", args);
 }
 
 // ─── L3 Quest Chain ───────────────────────────────────
@@ -131,8 +195,7 @@ export async function completeStepTx(
     toScBytesN32(questIdHex), toScAddress(pubKey),
     toScU32(step), toScBytesN32(photoCidHex),
   ];
-  try { await simulateTx(pubKey, c, "complete_step", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "complete_step", args);
 }
 
 export async function claimQuestTx(
@@ -141,8 +204,7 @@ export async function claimQuestTx(
   const c = getQuestChainContract();
   if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
   const args: xdr.ScVal[] = [toScBytesN32(questIdHex), toScAddress(pubKey)];
-  try { await simulateTx(pubKey, c, "claim_quest", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "claim_quest", args);
 }
 
 export async function getQuestStepsTx(pubKey: string, questIdHex: string): Promise<TxResult> {
@@ -171,8 +233,7 @@ export async function commitVoteTx(
   const args: xdr.ScVal[] = [
     toScBytesN32(disputeIdHex), toScAddress(pubKey), toScBytesN32(voteHashHex),
   ];
-  try { await simulateTx(pubKey, c, "commit_vote", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "commit_vote", args);
 }
 
 export async function revealVoteTx(
@@ -184,8 +245,7 @@ export async function revealVoteTx(
     toScBytesN32(disputeIdHex), toScAddress(pubKey),
     toScBool(vote), toScBytesN32(saltHex),
   ];
-  try { await simulateTx(pubKey, c, "reveal_vote", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "reveal_vote", args);
 }
 
 export async function resolveDisputeTx(
@@ -194,8 +254,7 @@ export async function resolveDisputeTx(
   const c = getDisputeContract();
   if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
   const args: xdr.ScVal[] = [toScBytesN32(disputeIdHex)];
-  try { await simulateTx(pubKey, c, "resolve", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "resolve", args);
 }
 
 export async function appealTx(
@@ -204,14 +263,12 @@ export async function appealTx(
   const c = getDisputeContract();
   if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
   const args: xdr.ScVal[] = [toScBytesN32(disputeIdHex), toScAddress(pubKey)];
-  try { await simulateTx(pubKey, c, "appeal", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "appeal", args);
 }
 
 export async function stakeTx(pubKey: string, amount: number): Promise<TxResult> {
   const c = getDisputeContract();
   if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
   const args: xdr.ScVal[] = [toScAddress(pubKey), toScI128(amount)];
-  try { await simulateTx(pubKey, c, "stake", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  return prepareContractTx(pubKey, c, "stake", args);
 }

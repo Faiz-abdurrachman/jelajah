@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { RequireLevel } from "@/components/feature-gate";
 import { ClaimHuntView } from "@/components/hunt/claim-hunt-view";
+import { Card, CardContent } from "@/components/ui/card";
 import { getHuntById } from "@/lib/supabase/client";
 import type { Hunt } from "@/types";
 
@@ -11,6 +12,7 @@ export default function HuntDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [hunt, setHunt] = useState<Hunt | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -18,7 +20,10 @@ export default function HuntDetailPage() {
     async function load() {
       const huntId = parseInt(id ?? "0", 10);
       if (!huntId || huntId <= 0) {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError("Hunt tidak ditemukan.");
+          setLoading(false);
+        }
         return;
       }
 
@@ -42,6 +47,12 @@ export default function HuntDetailPage() {
             photoCid: (row.photo_cid as string) ?? null,
             createdAt: row.created_at as string,
           });
+        } else {
+          setError("Hunt tidak ditemukan.");
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Gagal memuat data hunt.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -60,9 +71,15 @@ export default function HuntDetailPage() {
             <div className="h-8 w-48 bg-muted rounded" />
             <div className="h-64 bg-muted rounded-lg" />
           </div>
-        ) : (
-          <ClaimHuntView hunt={hunt ?? undefined} />
-        )}
+        ) : error ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">{error}</p>
+            </CardContent>
+          </Card>
+        ) : hunt ? (
+          <ClaimHuntView hunt={hunt} />
+        ) : null}
       </div>
     </RequireLevel>
   );

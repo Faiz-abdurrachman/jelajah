@@ -284,3 +284,139 @@ export function subscribeToCommunityActivities(callback: (activity: Record<strin
     )
     .subscribe();
 }
+
+// ─── Write Helpers ───────────────────────────────────
+
+/**
+ * Insert a new hunt record after contract deployment.
+ */
+export async function insertHunt(params: {
+  contractId: string;
+  hiderPubkey: string;
+  huntType: string;
+  clue: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  amountStroops: number;
+  deadline: string;
+  photoCid?: string | null;
+}): Promise<number> {
+  const { data, error } = await supabase
+    .from("hunts")
+    .insert({
+      contract_id: params.contractId,
+      hider_pubkey: params.hiderPubkey,
+      hunt_type: params.huntType,
+      clue: params.clue,
+      latitude: params.latitude,
+      longitude: params.longitude,
+      radius_meters: params.radiusMeters,
+      amount_stroops: params.amountStroops,
+      deadline: params.deadline,
+      photo_cid: params.photoCid ?? null,
+      status: "active",
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id as number;
+}
+
+/**
+ * Insert a new claim for a hunt.
+ */
+export async function insertClaim(params: {
+  huntId: number;
+  hunterPubkey: string;
+  photoCid: string | null;
+  gpsLat: number;
+  gpsLng: number;
+  txHash: string;
+}): Promise<number> {
+  const { data, error } = await supabase
+    .from("claims")
+    .insert({
+      hunt_id: params.huntId,
+      hunter_pubkey: params.hunterPubkey,
+      photo_cid: params.photoCid,
+      gps_lat: params.gpsLat,
+      gps_lng: params.gpsLng,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id as number;
+}
+
+/**
+ * Update claim status (approve/reject by hider).
+ */
+export async function updateClaimStatus(claimId: number, status: "approved" | "rejected"): Promise<void> {
+  const { error } = await supabase
+    .from("claims")
+    .update({ status, resolved_at: new Date().toISOString() })
+    .eq("id", claimId);
+
+  if (error) throw error;
+}
+
+/**
+ * Create a new brand campaign.
+ */
+export async function createCampaign(params: {
+  brandPubkey: string;
+  name: string;
+  description: string | null;
+  budget: number;
+  startDate: string;
+  endDate: string;
+}): Promise<number> {
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      brand_pubkey: params.brandPubkey,
+      name: params.name,
+      description: params.description,
+      budget: params.budget,
+      start_date: params.startDate,
+      end_date: params.endDate,
+      status: "active",
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id as number;
+}
+
+/**
+ * Get pending claims for a specific hunt (hider view).
+ */
+export async function getPendingClaims(huntId: number) {
+  const { data } = await supabase
+    .from("claims")
+    .select("*, hunter:users!claims_hunter_pubkey_fkey(*)")
+    .eq("hunt_id", huntId)
+    .eq("status", "pending")
+    .order("submitted_at", { ascending: false });
+
+  return data ?? [];
+}
+
+/**
+ * Get all claims for a specific hunt.
+ */
+export async function getClaimsByHunt(huntId: number) {
+  const { data } = await supabase
+    .from("claims")
+    .select("*, hunter:users!claims_hunter_pubkey_fkey(*)")
+    .eq("hunt_id", huntId)
+    .order("submitted_at", { ascending: false });
+
+  return data ?? [];
+}
+

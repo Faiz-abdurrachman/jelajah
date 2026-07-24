@@ -1,18 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MapPin, Camera, CheckCircle, Clock, XCircle, AlertTriangle, Upload } from "lucide-react";
+import { MapPin, Camera, CheckCircle, Clock, XCircle, AlertTriangle, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/components/wallet/wallet-provider";
-import { HuntStatus } from "@/config/hunt-types";
 import type { Hunt } from "@/types";
-import { submitClaimTx } from "@/lib/stellar/soroban";
+import { submitClaimTx, pollTx } from "@/lib/stellar/soroban";
 import { uploadToIpfs, isIpfsConfigured } from "@/lib/ipfs/pinata";
+import { insertClaim } from "@/lib/supabase/client";
 
-type ClaimPhase = "idle" | "checking" | "canClaim" | "submitting" | "pending" | "approved" | "rejected";
+type ClaimPhase = "idle" | "checking" | "canClaim" | "uploading" | "signing" | "pending" | "approved" | "rejected";
 
 interface GeoPosition {
   lat: number;
@@ -30,26 +30,12 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Mock hunt data ─────────────────────────────────
+interface ClaimHuntViewProps {
+  hunt: Hunt;
+}
 
-const MOCK_HUNT: Hunt = {
-  id: 1,
-  contractId: "CCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  hiderPubkey: "GAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  huntType: 0,
-  clue: "Cari patung kuda putih di tengah kota. Di bawah patung, ada sebuah kotak kecil berisi petunjuk selanjutnya.",
-  latitude: -6.2088,
-  longitude: 106.8456,
-  radiusMeters: 50,
-  amountStroops: 100_000_000,
-  deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  status: "Active" as HuntStatus,
-  photoCid: null,
-  createdAt: new Date().toISOString(),
-};
-
-export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
-  const { isConnected, publicKey } = useWallet();
+export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
+  const { isConnected, publicKey, signAndSubmit } = useWallet();
   const [phase, setPhase] = useState<ClaimPhase>("idle");
   const [currentPosition, setCurrentPosition] = useState<GeoPosition | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
@@ -59,8 +45,6 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
   const [gpsWatchId, setGpsWatchId] = useState<number | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
-
-  const hunt = huntProp ?? MOCK_HUNT;
 
   // GPS tracking
   const startGps = useCallback(() => {
@@ -101,6 +85,13 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
     };
   }, [gpsWatchId]);
 
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (!claimError) return;
+    const timer = setTimeout(() => setClaimError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [claimError]);
+
   // Photo handling
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -118,36 +109,82 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
     if (!photoFile || !currentPosition || !publicKey) return;
     setClaimError(null);
 
+    // Phase 1: Upload photo to IPFS
+    setPhase("uploading");
+
+    let photoCidHex = "";
     try {
-      // Upload photo to IPFS (if configured)
-      let photoCidHex = "0000000000000000000000000000000000000000000000000000000000000000";
       if (isIpfsConfigured()) {
         const ipfsResult = await uploadToIpfs(photoFile);
-        const cidBuffer = Buffer.from(ipfsResult.cid.padEnd(64, "0").slice(0, 64));
-        photoCidHex = cidBuffer.toString("hex").padEnd(64, "0").slice(0, 64);
-      }
-
-      // Call contract
-      const result = await submitClaimTx(
-        publicKey,
-        MOCK_HUNT.contractId ?? "",
-        photoCidHex,
-        currentPosition.lat,
-        currentPosition.lng
-      );
-
-      if (result.success) {
-        setTxHash(result.hash || null);
-        setPhase("pending");
+        photoCidHex = ipfsResult.cid.slice(0, 64).padEnd(64, "0");
       } else {
-        setClaimError(result.error ?? "Gagal submit claim");
+        // Fallback: hash the filename as a simple CID placeholder
+        const encoder = new TextEncoder();
+        const data = encoder.encode(photoFile.name + photoFile.size.toString());
+        const hashBuf = await crypto.subtle.digest("SHA-256", data);
+        photoCidHex = Array.from(new Uint8Array(hashBuf), (b) => b.toString(16).padStart(2, "0")).join("");
       }
-    } catch (err) {
-      setClaimError(err instanceof Error ? err.message : "Terjadi kesalahan");
+    } catch {
+      setClaimError("Gagal upload foto ke IPFS");
+      setPhase("canClaim");
+      return;
     }
-  };
 
-  const timeRemaining = "23:45:12";
+    // Phase 2: Build & simulate contract tx
+    setPhase("signing");
+
+    const contractAddr = hunt.contractId;
+    if (!contractAddr) {
+      setClaimError("Contract hunt belum di-deploy");
+      setPhase("canClaim");
+      return;
+    }
+
+    const prepareResult = await submitClaimTx(
+      publicKey,
+      contractAddr,
+      photoCidHex,
+      currentPosition.lat,
+      currentPosition.lng
+    );
+
+    if (!prepareResult.success || !prepareResult.xdr) {
+      setClaimError(prepareResult.error ?? "Gagal menyiapkan transaksi");
+      setPhase("canClaim");
+      return;
+    }
+
+    // Phase 3: Sign via Freighter & submit to network
+    const signResult = await signAndSubmit(prepareResult.xdr);
+
+    if (!signResult.success) {
+      setClaimError(signResult.error ?? "Gagal sign/submit transaksi");
+      setPhase("canClaim");
+      return;
+    }
+
+    const submittedHash = signResult.hash;
+
+    // Phase 4: Persist claim to Supabase
+    try {
+      await insertClaim({
+        huntId: hunt.id,
+        hunterPubkey: publicKey,
+        photoCid: photoCidHex || null,
+        gpsLat: currentPosition.lat,
+        gpsLng: currentPosition.lng,
+        txHash: submittedHash,
+      });
+    } catch {
+      // Claim is on-chain even if DB insert fails — non-blocking
+    }
+
+    setTxHash(submittedHash);
+    setPhase("pending");
+
+    // Poll for tx confirmation (fire-and-forget)
+    void pollTx(submittedHash, 30);
+  };
 
   if (!isConnected) {
     return (
@@ -178,7 +215,9 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <span className="text-muted-foreground">Reward: </span>
-              <span className="font-medium">Rp 100.000</span>
+              <span className="font-medium">
+                {hunt.amountStroops ? `${hunt.amountStroops / 10_000_000} XLM` : "N/A"}
+              </span>
             </div>
             <div>
               <span className="text-muted-foreground">Radius: </span>
@@ -244,7 +283,7 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
         </CardContent>
       </Card>
 
-      {/* Photo Capture */}
+      {/* Photo Capture + Upload */}
       {phase === "canClaim" && (
         <Card>
           <CardHeader>
@@ -302,18 +341,32 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
         </Card>
       )}
 
-      {/* Claim Status */}
+      {/* Uploading / Signing states */}
+      {(phase === "uploading" || phase === "signing") && (
+        <Card>
+          <CardContent className="py-8 text-center space-y-3">
+            <Loader2 className="size-10 text-primary mx-auto animate-spin" />
+            <h3 className="font-semibold">
+              {phase === "uploading" ? "Mengupload foto..." : "Menandatangani transaksi..."}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {phase === "uploading"
+                ? "Upload foto ke IPFS"
+                : "Buka Freighter untuk menandatangani transaksi"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Claim Status — Pending */}
       {phase === "pending" && (
         <Card>
           <CardContent className="py-8 text-center space-y-3">
             <Clock className="size-10 text-primary mx-auto" />
             <h3 className="font-semibold">Menunggu Verifikasi</h3>
             <p className="text-sm text-muted-foreground">
-              Hider punya waktu 24 jam untuk verifikasi
+              Hider punya waktu untuk verifikasi claim kamu
             </p>
-            <div className="text-2xl font-mono font-bold text-primary">
-              {timeRemaining}
-            </div>
             {txHash && (
               <p className="text-xs font-mono text-muted-foreground break-all">
                 Tx: {txHash.slice(0, 12)}...{txHash.slice(-8)}
@@ -355,3 +408,4 @@ export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
     </div>
   );
 }
+
