@@ -10,6 +10,7 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { getBrandProfile } from "@/lib/supabase/client";
 import { BrandDashboard } from "@/components/brand/brand-dashboard";
 import { CampaignCreate } from "@/components/brand/campaign-create";
+import type { Brand } from "@/types";
 
 export default function BrandDashboardPage() {
   const { publicKey, isConnected } = useWallet();
@@ -31,8 +32,20 @@ export default function BrandDashboardPage() {
         const profile = await getBrandProfile(publicKey);
         if (!cancelled) {
           setIsBrand(!!profile);
-          setBrandData(profile as unknown as Record<string, unknown>);
-        }
+          setBrandData(profile ? brandRowToData(profile) : null);
+}
+
+function brandRowToData(brand: Brand): Record<string, unknown> {
+  const raw = brand as unknown as Record<string, unknown>;
+  return {
+    company_name: brand.companyName,
+    subscription_tier: brand.subscriptionTier,
+    subscription_start: raw.subscription_start ?? null,
+    subscription_end: brand.subscriptionEnd,
+    total_campaigns: brand.totalCampaigns,
+    total_spent: raw.total_spent ?? 0,
+  };
+}
       } catch {
         if (!cancelled) setIsBrand(false);
       } finally {

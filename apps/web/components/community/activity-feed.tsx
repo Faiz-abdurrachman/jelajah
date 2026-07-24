@@ -34,6 +34,17 @@ const ACTIVITY_COLORS: Record<string, string> = {
   default: "text-muted-foreground bg-muted",
 };
 
+function activityTitle(activityType: string): string {
+  const titles: Record<string, string> = {
+    claim: "Hunt Claimed!",
+    create: "New Hunt Created",
+    badge_earned: "Badge Earned!",
+    quest_complete: "Quest Completed!",
+    referral: "New Referral",
+  };
+  return titles[activityType] ?? activityType.replace(/_/g, " ");
+}
+
 export function ActivityFeed() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,9 +59,9 @@ export function ActivityFeed() {
 
         const mapped: Activity[] = (data ?? []).map((a: Record<string, unknown>) => ({
           id: a.id as number,
-          type: (a.type as string) ?? "default",
-          title: (a.title as string) ?? "",
-          message: (a.message as string) ?? "",
+          type: (a.activity_type as string) ?? "default",
+          title: activityTitle(a.activity_type as string),
+          message: (a.description as string) ?? "",
           userPubkey: (a.user_pubkey as string) ?? "",
           timestamp: (a.created_at as string) ?? new Date().toISOString(),
         }));
@@ -68,9 +79,9 @@ export function ActivityFeed() {
       setActivities((prev) => [
         {
           id: a.id as number,
-          type: (a.type as string) ?? "default",
-          title: (a.title as string) ?? "",
-          message: (a.message as string) ?? "",
+          type: (a.activity_type as string) ?? "default",
+          title: activityTitle(a.activity_type as string),
+          message: (a.description as string) ?? "",
           userPubkey: (a.user_pubkey as string) ?? "",
           timestamp: (a.created_at as string) ?? new Date().toISOString(),
         },

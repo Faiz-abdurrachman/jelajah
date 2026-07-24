@@ -53,16 +53,17 @@ export default function QuestDetailPage() {
           if (quest) {
             setState((prev) => ({
               ...prev,
-              hunt: quest as unknown as Hunt,
+              hunt: mapSupabaseToHunt(quest),
               steps: generateMockSteps(questId),
               loading: false,
             }));
           } else {
             setState((prev) => ({
               ...prev,
-              hunt: getMockQuest(questId),
-              steps: generateMockSteps(questId),
+              hunt: null,
+              steps: [],
               loading: false,
+              error: null,
             }));
           }
         }
@@ -70,9 +71,10 @@ export default function QuestDetailPage() {
         if (!cancelled) {
           setState((prev) => ({
             ...prev,
-            hunt: getMockQuest(questId),
-            steps: generateMockSteps(questId),
+            hunt: null,
+            steps: [],
             loading: false,
+            error: "Failed to load quest data.",
           }));
         }
       }
@@ -191,21 +193,21 @@ export default function QuestDetailPage() {
   );
 }
 
-function getMockQuest(id: string): Hunt {
+function mapSupabaseToHunt(row: Record<string, unknown>): Hunt {
   return {
-    id: parseInt(id, 10) || 1,
-    contractId: `CC${"X".repeat(54)}`,
-    hiderPubkey: "GAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-    huntType: "quest" as never,
-    clue: "Jelajahi 3 lokasi bersejarah di Jakarta dan temukan petunjuk di setiap titik.",
-    latitude: -6.2088,
-    longitude: 106.8456,
-    radiusMeters: 100,
-    amountStroops: null,
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: "active" as never,
-    photoCid: null,
-    createdAt: new Date().toISOString(),
+    id: row.id as number,
+    contractId: (row.contract_id as string) ?? null,
+    hiderPubkey: row.hider_pubkey as string,
+    huntType: row.hunt_type as Hunt["huntType"],
+    clue: row.clue as string,
+    latitude: row.latitude as number,
+    longitude: row.longitude as number,
+    radiusMeters: (row.radius_meters as number) ?? 50,
+    amountStroops: (row.amount_stroops as number) ?? null,
+    deadline: row.deadline as string,
+    status: row.status as Hunt["status"],
+    photoCid: (row.photo_cid as string) ?? null,
+    createdAt: row.created_at as string,
   };
 }
 

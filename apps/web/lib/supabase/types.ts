@@ -166,6 +166,199 @@ export interface Database {
           created_at?: string;
         };
       };
+      appeals: {
+        Row: {
+          id: number;
+          dispute_id: number;
+          appellant_pubkey: string;
+          reason: string;
+          additional_evidence: string | null;
+          verifiers: string[];
+          votes: Record<string, unknown>;
+          status: string;
+          resolution: string | null;
+          fee_paid: number;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          dispute_id: number;
+          appellant_pubkey: string;
+          reason: string;
+          additional_evidence?: string | null;
+          verifiers?: string[];
+          votes?: Record<string, unknown>;
+          status?: string;
+          resolution?: string | null;
+          fee_paid?: number;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+      };
+      campaigns: {
+        Row: {
+          id: number;
+          brand_pubkey: string;
+          name: string;
+          description: string | null;
+          budget: number | null;
+          start_date: string | null;
+          end_date: string | null;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          brand_pubkey: string;
+          name: string;
+          description?: string | null;
+          budget?: number | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          status?: string;
+          created_at?: string;
+        };
+      };
+      campaign_hunts: {
+        Row: {
+          campaign_id: number;
+          hunt_id: number;
+        };
+        Insert: {
+          campaign_id: number;
+          hunt_id: number;
+        };
+      };
+      referrals: {
+        Row: {
+          id: number;
+          referrer_pubkey: string;
+          referee_pubkey: string;
+          status: string;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          referrer_pubkey: string;
+          referee_pubkey: string;
+          status?: string;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+      };
+      leaderboard_snapshots: {
+        Row: {
+          id: number;
+          rank_type: string;
+          user_pubkey: string;
+          score: number;
+          period_start: string;
+          period_end: string;
+          rank: number;
+          created_at: string;
+        };
+        Insert: {
+          rank_type: string;
+          user_pubkey: string;
+          score: number;
+          period_start: string;
+          period_end: string;
+          rank: number;
+          created_at?: string;
+        };
+      };
+      streaks: {
+        Row: {
+          id: number;
+          user_pubkey: string;
+          streak_type: string;
+          current_count: number;
+          longest_count: number;
+          last_activity_date: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_pubkey: string;
+          streak_type: string;
+          current_count?: number;
+          longest_count?: number;
+          last_activity_date?: string | null;
+          updated_at?: string;
+        };
+      };
+      user_badges: {
+        Row: {
+          id: number;
+          user_pubkey: string;
+          badge_id: number;
+          badge_name: string;
+          earned_at: string;
+        };
+        Insert: {
+          user_pubkey: string;
+          badge_id: number;
+          badge_name: string;
+          earned_at?: string;
+        };
+      };
+      community_activities: {
+        Row: {
+          id: number;
+          user_pubkey: string;
+          activity_type: string;
+          description: string;
+          metadata: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: {
+          user_pubkey: string;
+          activity_type: string;
+          description: string;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+      };
+      api_keys: {
+        Row: {
+          id: number;
+          user_pubkey: string;
+          api_key_hash: string;
+          name: string;
+          permissions: Record<string, unknown>;
+          is_active: boolean;
+          last_used_at: string | null;
+          created_at: string;
+          expires_at: string | null;
+        };
+        Insert: {
+          user_pubkey: string;
+          api_key_hash: string;
+          name: string;
+          permissions?: Record<string, unknown>;
+          is_active?: boolean;
+          last_used_at?: string | null;
+          created_at?: string;
+          expires_at?: string | null;
+        };
+      };
+      audit_log: {
+        Row: {
+          id: number;
+          action: string;
+          actor_pubkey: string | null;
+          entity_type: string | null;
+          entity_id: string | null;
+          details: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: {
+          action: string;
+          actor_pubkey?: string | null;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          details?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
