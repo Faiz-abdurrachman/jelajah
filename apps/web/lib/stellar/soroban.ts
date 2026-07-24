@@ -145,6 +145,22 @@ export async function claimQuestTx(
   catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
 }
 
+export async function getQuestStepsTx(pubKey: string, questIdHex: string): Promise<TxResult> {
+  const c = getQuestChainContract();
+  if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
+  const args: xdr.ScVal[] = [toScBytesN32(questIdHex)];
+  try { await simulateTx(pubKey, c, "get_steps", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+export async function getCurrentStepTx(pubKey: string, questIdHex: string): Promise<TxResult> {
+  const c = getQuestChainContract();
+  if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
+  const args: xdr.ScVal[] = [toScBytesN32(questIdHex), toScAddress(pubKey)];
+  try { await simulateTx(pubKey, c, "get_current_step", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
 // ─── L3 Dispute ───────────────────────────────────────
 
 export async function commitVoteTx(

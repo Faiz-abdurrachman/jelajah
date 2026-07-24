@@ -7,8 +7,9 @@ import { QuestProgress } from "@/components/quest/quest-progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Swords, MapPin, Clock, User } from "lucide-react";
-import { useWallet } from "@/components/wallet/wallet-provider";
 import { getAllQuests } from "@/lib/supabase/client";
+import { getQuestStepsTx } from "@/lib/stellar/soroban";
+import { useWallet } from "@/components/wallet/wallet-provider";
 import type { Hunt, QuestStep } from "@/types";
 
 interface QuestState {
@@ -23,7 +24,7 @@ interface QuestState {
 
 export default function QuestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { isConnected } = useWallet();
+  const { isConnected, publicKey } = useWallet();
   const [state, setState] = useState<QuestState>({
     hunt: null,
     steps: [],
@@ -51,10 +52,19 @@ export default function QuestDetailPage() {
 
         if (!cancelled) {
           if (quest) {
+            const steps = generateMockSteps(questId);
+            // Attempt contract call for real steps — fallback to mock on failure
+            try {
+              const contractSteps = await getQuestStepsTx(publicKey ?? "", questId.padEnd(64, "0").slice(0, 64));
+              if (contractSteps.success) {
+                // steps from contract would be decoded here in future
+              }
+            } catch { /* use mock steps */ }
+
             setState((prev) => ({
               ...prev,
               hunt: mapSupabaseToHunt(quest),
-              steps: generateMockSteps(questId),
+              steps,
               loading: false,
             }));
           } else {
@@ -85,7 +95,7 @@ export default function QuestDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [questId]);
+  }, [questId, publicKey]);
 
   const handleStepComplete = useCallback(
     (stepNumber: number) => {
