@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   getAddress,
-  isConnected,
   requestAccess,
 } from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
@@ -48,12 +47,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkExistingConnection = async () => {
       try {
-        const status = await isConnected();
-        if (status.isConnected) {
-          const { address } = await getAddress();
-          if (address) {
-            setPublicKey(address);
-          }
+        const { address } = await getAddress();
+        if (address) {
+          setPublicKey(address);
         }
       } catch {
         // Freighter not installed
@@ -67,17 +63,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const status = await isConnected();
-      if (!status.isConnected) {
-        await requestAccess();
+      // Freighter v6: requestAccess triggers permission popup and returns address
+      const { address, error: accessError } = await requestAccess();
+      if (accessError || !address) {
+        // If requestAccess fails, try getAddress directly (already authorized)
+        const { address: addr, error: addrError } = await getAddress();
+        if (addrError || !addr) {
+          throw new Error("Gagal mendapatkan address wallet. Pastikan Freighter terinstall dan unlocked.");
+        }
+        setPublicKey(addr);
+      } else {
+        setPublicKey(address);
       }
-
-      const { address } = await getAddress();
-      if (!address) {
-        throw new Error("Gagal mendapatkan address wallet");
-      }
-
-      setPublicKey(address);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Gagal connect ke Freighter";
