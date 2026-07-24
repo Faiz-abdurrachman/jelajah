@@ -28,7 +28,7 @@ export function QuestProgress({
   onStepComplete,
   onQuestClaimed,
 }: QuestProgressProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, signAndSubmit } = useWallet();
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [claiming, setClaiming] = useState(false);
 
@@ -40,14 +40,18 @@ export function QuestProgress({
     if (!publicKey) return;
     setClaiming(true);
     try {
-      const result = await claimQuestTx(publicKey, questId);
-      if (result.success) {
+      const prep = await claimQuestTx(publicKey, questId);
+      if (!prep.success || !prep.xdr) {
+        return;
+      }
+      const submit = await signAndSubmit(prep.xdr);
+      if (submit.success) {
         onQuestClaimed();
       }
     } finally {
       setClaiming(false);
     }
-  }, [publicKey, questId, onQuestClaimed]);
+  }, [publicKey, questId, onQuestClaimed, signAndSubmit]);
 
   const handleStepComplete = useCallback(
     (stepNumber: number) => {

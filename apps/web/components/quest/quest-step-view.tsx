@@ -17,7 +17,7 @@ interface QuestStepViewProps {
 }
 
 export function QuestStepView({ questId, step, onComplete, onCancel }: QuestStepViewProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, signAndSubmit } = useWallet();
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,12 +73,18 @@ export function QuestStepView({ questId, step, onComplete, onCancel }: QuestStep
 
     try {
       const photoHex = await fileToSha256Hex(photo);
-      const result = await completeStepTx(publicKey, questId, step.stepNumber, photoHex);
+      const prep = await completeStepTx(publicKey, questId, step.stepNumber, photoHex);
 
-      if (result.success) {
+      if (!prep.success || !prep.xdr) {
+        setError(prep.error ?? "Failed to prepare complete step tx.");
+        return;
+      }
+
+      const submit = await signAndSubmit(prep.xdr);
+      if (submit.success) {
         onComplete();
       } else {
-        setError(result.error ?? "Transaction failed. Please try again.");
+        setError(submit.error ?? "Failed to sign or submit complete step.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error occurred.");

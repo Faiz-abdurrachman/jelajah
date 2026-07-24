@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Clock, MapPin, User, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,32 +29,28 @@ export function HiderApproveView({ hunt, onClaimResolved }: HiderApproveViewProp
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingClaimId, setActingClaimId] = useState<number | null>(null);
 
-  const loadClaims = useCallback(async () => {
-    setLoading(true);
-    try {
-      const rows = await getPendingClaims(hunt.id);
-      const mapped: PendingClaim[] = (rows as Array<Record<string, unknown>>).map((r) => ({
-        id: r.id as number,
-        hunterPubkey: r.hunter_pubkey as string,
-        photoCid: (r.photo_cid as string) ?? null,
-        gpsLat: (r.gps_lat as number) ?? null,
-        gpsLng: (r.gps_lng as number) ?? null,
-        submittedAt: r.submitted_at as string,
-        hunter: r.hunter
-          ? { display_name: (r.hunter as Record<string, unknown>).display_name as string | null, public_key: (r.hunter as Record<string, unknown>).public_key as string }
-          : undefined,
-      }));
-      setClaims(mapped);
-    } catch {
-      setActionError("Gagal memuat data klaim.");
-    } finally {
-      setLoading(false);
-    }
-  }, [hunt.id]);
-
   useEffect(() => {
-    void loadClaims();
-  }, [loadClaims]);
+    void (async () => {
+      setLoading(true);
+      try {
+        const data = await getPendingClaims(hunt.id);
+        const mapped = data.map((row: Record<string, unknown>) => ({
+          id: Number(row.id),
+          hunterPubkey: String(row.hunter_pubkey ?? ""),
+          photoCid: row.photo_cid ? String(row.photo_cid) : null,
+          gpsLat: row.gps_lat ? Number(row.gps_lat) : null,
+          gpsLng: row.gps_lng ? Number(row.gps_lng) : null,
+          submittedAt: String(row.submitted_at ?? ""),
+          status: String(row.status ?? "pending"),
+        }));
+        setClaims(mapped);
+      } catch {
+        setActionError("Gagal memuat data klaim.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [hunt.id]);
 
   useEffect(() => {
     if (!actionError) return;

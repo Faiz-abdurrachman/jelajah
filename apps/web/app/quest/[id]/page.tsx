@@ -60,12 +60,13 @@ export default function QuestDetailPage() {
                 questId.padEnd(64, "0").slice(0, 64)
               );
               if (contractSteps.success && contractSteps.result) {
-                // Attempt to decode steps from contract response if available
-                // Contract returns Vec<Step> — decoding depends on contract schema
-                // For now, steps remain empty until contract is fully wired
+                const decoded: QuestStep[] = JSON.parse(contractSteps.result) as QuestStep[];
+                if (Array.isArray(decoded) && decoded.length > 0) {
+                  steps = decoded;
+                }
               }
             } catch {
-              // Contract call failed — steps remain empty
+              // Contract call failed or no steps — steps remain empty
             }
 
             setState((prev) => ({

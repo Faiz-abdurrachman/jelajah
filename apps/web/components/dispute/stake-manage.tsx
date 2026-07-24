@@ -15,11 +15,12 @@ interface StakeManageProps {
 }
 
 export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, signAndSubmit } = useWallet();
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<"stake" | "unstake">("stake");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   const parsedAmount = parseFloat(amount);
   const isValid = !isNaN(parsedAmount) && parsedAmount > 0;
@@ -32,13 +33,20 @@ export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
     setError(null);
 
     try {
-      const result = await stakeTx(publicKey, parsedAmount);
-      if (result.success) {
+      const prep = await stakeTx(publicKey, parsedAmount);
+      if (!prep.success || !prep.xdr) {
+        setError(prep.error ?? "Failed to prepare stake transaction.");
+        return;
+      }
+
+      const submit = await signAndSubmit(prep.xdr);
+      if (submit.success) {
+        setTxHash(submit.hash);
         const newStake = mode === "stake" ? currentStake + parsedAmount : currentStake - parsedAmount;
         onStakeChange(newStake);
         setAmount("");
       } else {
-        setError(result.error ?? "Stake transaction failed.");
+        setError(submit.error ?? "Failed to sign or submit stake transaction.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Stake operation failed.");
@@ -147,6 +155,12 @@ export function StakeManage({ currentStake, onStakeChange }: StakeManageProps) {
             </>
           )}
         </Button>
+
+        {txHash && (
+          <p className="text-xs font-mono text-muted-foreground break-all">
+            Tx: {txHash.slice(0, 12)}...{txHash.slice(-8)}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

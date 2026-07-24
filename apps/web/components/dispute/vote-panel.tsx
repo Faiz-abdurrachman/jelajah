@@ -17,12 +17,13 @@ interface VotePanelProps {
 }
 
 export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, signAndSubmit } = useWallet();
   const [phase, setPhase] = useState<VotePhase>("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [salt, setSalt] = useState<string>("");
   const [pendingVote, setPendingVote] = useState<boolean | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   const generateSalt = useCallback((): string => {
     const arr = new Uint8Array(32);
@@ -42,11 +43,18 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
 
       try {
         const voteHash = await computeVoteHash(publicKey, vote, newSalt);
-        const result = await commitVoteTx(publicKey, disputeId, voteHash);
-        if (result.success) {
+        const prep = await commitVoteTx(publicKey, disputeId, voteHash);
+        if (!prep.success || !prep.xdr) {
+          setError(prep.error ?? "Failed to prepare commit vote tx.");
+          return;
+        }
+
+        const submit = await signAndSubmit(prep.xdr);
+        if (submit.success) {
+          setTxHash(submit.hash);
           setPhase("committed");
         } else {
-          setError(result.error ?? "Failed to commit vote.");
+          setError(submit.error ?? "Failed to sign or submit commit vote.");
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unexpected error.");
@@ -54,7 +62,7 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
         setSubmitting(false);
       }
     },
-    [publicKey, disputeId, generateSalt]
+    [publicKey, disputeId, generateSalt, signAndSubmit]
   );
 
   const handleRevealVote = useCallback(async () => {
@@ -63,19 +71,26 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
     setError(null);
 
     try {
-      const result = await revealVoteTx(publicKey, disputeId, pendingVote, salt);
-      if (result.success) {
+      const prep = await revealVoteTx(publicKey, disputeId, pendingVote, salt);
+      if (!prep.success || !prep.xdr) {
+        setError(prep.error ?? "Failed to prepare reveal vote tx.");
+        return;
+      }
+
+      const submit = await signAndSubmit(prep.xdr);
+      if (submit.success) {
+        setTxHash(submit.hash);
         setPhase("revealed");
         onVoteSubmitted();
       } else {
-        setError(result.error ?? "Failed to reveal vote.");
+        setError(submit.error ?? "Failed to sign or submit reveal vote.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
       setSubmitting(false);
     }
-  }, [publicKey, disputeId, pendingVote, salt, onVoteSubmitted]);
+  }, [publicKey, disputeId, pendingVote, salt, onVoteSubmitted, signAndSubmit]);
 
   if (!publicKey) {
     return (
@@ -155,6 +170,11 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
               <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 font-mono">
                 Salt: {salt.slice(0, 16)}...
               </p>
+              {txHash && (
+                <p className="text-xs font-mono text-muted-foreground mt-1 break-all">
+                  Tx: {txHash.slice(0, 12)}...{txHash.slice(-8)}
+                </p>
+              )}
             </div>
             <Button className="w-full" onClick={handleRevealVote} disabled={submitting}>
               {submitting ? (
@@ -170,13 +190,18 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
         )}
 
         {phase === "revealed" && (
-          <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 p-3">
+          <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 p-3 space-y-2">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
               Vote revealed — {pendingVote ? "Approved" : "Rejected"}.
             </p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
+            <p className="text-xs text-emerald-600 dark:text-emerald-500">
               Your vote has been counted. Results will be available when all verifiers reveal.
             </p>
+            {txHash && (
+              <p className="text-xs font-mono text-muted-foreground break-all">
+                Tx: {txHash.slice(0, 12)}...{txHash.slice(-8)}
+              </p>
+            )}
           </div>
         )}
       </CardContent>

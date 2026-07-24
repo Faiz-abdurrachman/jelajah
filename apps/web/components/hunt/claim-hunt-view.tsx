@@ -182,8 +182,14 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
     setTxHash(submittedHash);
     setPhase("pending");
 
-    // Poll for tx confirmation (fire-and-forget)
-    void pollTx(submittedHash, 30);
+    // Poll for tx confirmation and update UI
+    pollTx(submittedHash, 30).then((confirmed) => {
+      if (confirmed.success) {
+        setPhase("pending"); // stays pending until hider approves
+      }
+    }).catch(() => {
+      // Poll failed — tx will still be picked up by Supabase or horizon
+    });
   };
 
   if (!isConnected) {

@@ -1,6 +1,7 @@
 // JELAJAH — Soroban SDK Helpers
 import { rpc, TransactionBuilder, Contract, Address, nativeToScVal, scValToNative, Networks, xdr } from "@stellar/stellar-sdk";
 import { CONTRACTS } from "@/config/contracts";
+import type { QuestStep } from "@/types";
 
 export interface TxResult {
   hash: string;
@@ -186,6 +187,59 @@ export async function submitClaimTx(
 
 // ─── L3 Quest Chain ───────────────────────────────────
 
+/**
+ * Convert a QuestStep to its ScVal struct encoding.
+ * Soroban structs are encoded as ScvVec with fields in declaration order:
+ *   step_number: u32, clue_hash: BytesN<32>, gps_lat: i64, gps_lng: i64, radius: u32, is_final: bool
+ */
+function questStepToScVal(step: QuestStep): xdr.ScVal {
+  return xdr.ScVal.scvVec([
+    toScU32(step.stepNumber),
+    toScBytesN32(step.clueHash),
+    toScI64(BigInt(Math.round(step.gpsLat * 10_000_000))),
+    toScI64(BigInt(Math.round(step.gpsLng * 10_000_000))),
+    toScU32(Math.round(step.radius)),
+    toScBool(step.isFinal),
+  ]);
+}
+
+/**
+ * Decode a ScVal QuestStep struct back to our QuestStep type.
+ */
+function decodeQuestStep(scVal: xdr.ScVal): QuestStep {
+  const vec = scVal.vec();
+  if (!vec || vec.length < 6) throw new Error("Invalid QuestStep ScVal");
+
+  return {
+    stepNumber: Number(scValToNative(vec[0])),
+    clueHash: Array.from((scValToNative(vec[1]) as Uint8Array))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(""),
+    gpsLat: Number(scValToNative(vec[2])) / 10_000_000,
+    gpsLng: Number(scValToNative(vec[3])) / 10_000_000,
+    radius: Number(scValToNative(vec[4])),
+    isFinal: scValToNative(vec[5]) as boolean,
+  };
+}
+
+/**
+ * Init quest steps on-chain via set_quest_steps(quest_id, hider, Vec<QuestStep>).
+ */
+export async function setQuestStepsTx(
+  pubKey: string,
+  questIdHex: string,
+  steps: QuestStep[]
+): Promise<TxResult> {
+  const c = getQuestChainContract();
+  if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
+  const args: xdr.ScVal[] = [
+    toScBytesN32(questIdHex),
+    toScAddress(pubKey),
+    xdr.ScVal.scvVec(steps.map((s) => questStepToScVal(s))),
+  ];
+  return prepareContractTx(pubKey, c, "set_quest_steps", args);
+}
+
 export async function completeStepTx(
   pubKey: string, questIdHex: string, step: number, photoCidHex: string
 ): Promise<TxResult> {
@@ -207,20 +261,47 @@ export async function claimQuestTx(
   return prepareContractTx(pubKey, c, "claim_quest", args);
 }
 
+/**
+ * Get quest steps from contract (read-only).
+ * Decodes the Vec<QuestStep> ScVal response into QuestStep[].
+ */
 export async function getQuestStepsTx(pubKey: string, questIdHex: string): Promise<TxResult> {
   const c = getQuestChainContract();
   if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
   const args: xdr.ScVal[] = [toScBytesN32(questIdHex)];
-  try { await simulateTx(pubKey, c, "get_steps", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  try {
+    const sim = await simulateTx(pubKey, c, "get_steps", args);
+    const retval = sim.result?.retval;
+    if (!retval) return { hash: "", success: false, error: "No return value from contract" };
+
+    const outerVec = retval.vec();
+    if (!outerVec) return { hash: "", success: false, error: "Expected Vec<QuestStep>" };
+
+    const steps: QuestStep[] = outerVec.map((s) => decodeQuestStep(s));
+    return { hash: "", success: true, result: JSON.stringify(steps) };
+  } catch (e) {
+    return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed to fetch steps" };
+  }
 }
 
+/**
+ * Get current step for a hunter (read-only).
+ * Returns u32 decoded from ScVal.
+ */
 export async function getCurrentStepTx(pubKey: string, questIdHex: string): Promise<TxResult> {
   const c = getQuestChainContract();
   if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
   const args: xdr.ScVal[] = [toScBytesN32(questIdHex), toScAddress(pubKey)];
-  try { await simulateTx(pubKey, c, "get_current_step", args); return { hash: "", success: true, result: "Sim OK" }; }
-  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+  try {
+    const sim = await simulateTx(pubKey, c, "get_current_step", args);
+    const retval = sim.result?.retval;
+    if (!retval) return { hash: "", success: false, error: "No return value" };
+
+    const currentStep = Number(scValToNative(retval));
+    return { hash: "", success: true, result: String(currentStep) };
+  } catch (e) {
+    return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed to fetch current step" };
+  }
 }
 
 // ─── L3 Dispute ───────────────────────────────────────
