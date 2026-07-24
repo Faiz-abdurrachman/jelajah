@@ -32,6 +32,52 @@
 |---|---|
 | ![Wallet](./public/screenshots/wallet.png) | ![How It Works](./public/screenshots/landing-how-it-works.png) |
 
+### 📱 Mobile Responsive
+
+| Mobile Landing | Mobile Map | Mobile Hunt Create |
+|---|---|---|
+| ![Mobile Landing](./public/screenshots/mobile-landing.png) | ![Mobile Map](./public/screenshots/mobile-map.png) | ![Mobile Hunt](./public/screenshots/mobile-hunt-create.png) |
+
+| Mobile Leaderboard | Mobile Profile | Mobile Community |
+|---|---|---|
+| ![Mobile Leaderboard](./public/screenshots/mobile-leaderboard.png) | ![Mobile Profile](./public/screenshots/mobile-profile.png) | ![Mobile Community](./public/screenshots/mobile-community.png) |
+
+---
+
+## 🧪 E2E Tests
+
+```
+Running 10 tests using 4 workers
+  ✅ Landing Page — page loads with title and CTA
+  ✅ Landing Page — how it works section renders
+  ✅ Landing Page — Lihat Peta button navigates to map
+  ✅ Map Page — page loads and renders map container
+  ✅ Map Page — navbar is visible on map page
+  ✅ Map Page — leaflet tiles load
+  ✅ Hunt Create Flow — create hunt page loads and wizard renders
+  ✅ Hunt Create Flow — hunt types are selectable
+  ✅ Hunt Create Flow — navigation buttons present
+  ✅ Hunt Detail Page — hunt detail page renders for a hunt ID
+
+  10 passed (8.7s)
+```
+
+Run: `npm run test:e2e`
+
+---
+
+## ⚙️ CI/CD
+
+**GitHub Actions** pipeline: `.github/workflows/ci.yml`
+
+```yaml
+steps:
+  - checkout → setup node → npm ci
+  - npx tsc --noEmit       # TypeScript check
+  - npx eslint --max=0     # Lint check
+  - npx next build          # Production build
+```
+
 ---
 
 ## 🔗 Contract Verification
