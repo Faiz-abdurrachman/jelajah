@@ -22,6 +22,7 @@ import { HuntType, HUNT_TYPE_LABELS, HUNT_TYPE_DESCRIPTIONS } from "@/config/hun
 import type { HuntType as HuntTypeEnum } from "@/config/hunt-types";
 import { createHuntTx } from "@/lib/stellar/soroban";
 import { uploadToIpfs, isIpfsConfigured } from "@/lib/ipfs/pinata";
+import { insertHunt } from "@/lib/supabase/client";
 
 // ─── Types ───────────────────────────────────────────
 
@@ -65,7 +66,7 @@ const HUNT_TYPE_OPTIONS: {
 
 export function CreateHuntWizard() {
   const router = useRouter();
-  const { isConnected, connect, publicKey } = useWallet();
+  const { isConnected, connect, publicKey, signAndSubmit } = useWallet();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<HuntFormData>(INITIAL_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -131,7 +132,7 @@ export function CreateHuntWizard() {
       // Step 4: Count amount in stroops (1 XLM = 10^7 stroops; or scale from IDR)
       const amountStroops = BigInt(Math.round(parseFloat(form.amount) * 10_000_000));
 
-      // Step 5: Call contract
+      // Step 5: Build & simulate contract tx
       const result = await createHuntTx(
         publicKey!,
         amountStroops,
@@ -143,12 +144,39 @@ export function CreateHuntWizard() {
         form.huntType!
       );
 
-      if (result.success) {
-        setTxHash(result.hash || null);
-        setIsSuccess(true);
-      } else {
-        setSubmitError(result.error ?? "Gagal membuat hunt");
+      if (!result.success || !result.xdr) {
+        setSubmitError(result.error ?? "Gagal mempersiapkan transaksi");
+        return;
       }
+
+      // Step 6: Sign via Freighter & submit to network
+      const submitResult = await signAndSubmit(result.xdr);
+      if (!submitResult.success || !submitResult.hash) {
+        setSubmitError(submitResult.error ?? "Gagal submit transaksi");
+        return;
+      }
+
+      setTxHash(submitResult.hash);
+
+      // Step 7: Persist hunt to Supabase
+      try {
+        await insertHunt({
+          contractId: submitResult.hash,
+          hiderPubkey: publicKey!,
+          huntType: HUNT_TYPE_LABELS[form.huntType!],
+          clue: form.clue,
+          latitude: parseFloat(form.latitude),
+          longitude: parseFloat(form.longitude),
+          radiusMeters: parseInt(form.radius.toString(), 10),
+          amountStroops: Number(amountStroops),
+          deadline: form.deadline,
+          photoCid: photoCid || null,
+        });
+      } catch {
+        // Hunt is on-chain even if DB insert fails — non-blocking
+      }
+
+      setIsSuccess(true);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
@@ -175,7 +203,7 @@ export function CreateHuntWizard() {
           </div>
         ) : (
           <p className="text-xs text-muted-foreground mb-6">
-            Transaksi disimulasikan — deploy contract untuk tx on-chain
+            Menunggu konfirmasi transaksi...
           </p>
         )}
         <div className="flex gap-3">
