@@ -37,22 +37,37 @@ export default function QuestDetailPage() {
   const questId = id ?? "1";
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadQuest() {
       setState((prev) => ({ ...prev, loading: true, error: null }));
       try {
         const quests = await getAllQuests();
+        if (cancelled) return;
+
         const quest = quests.find(
           (q: Record<string, unknown>) => String(q.id) === questId
         );
 
-        if (quest) {
-          setState((prev) => ({
-            ...prev,
-            hunt: quest as unknown as Hunt,
-            steps: generateMockSteps(questId),
-            loading: false,
-          }));
-        } else {
+        if (!cancelled) {
+          if (quest) {
+            setState((prev) => ({
+              ...prev,
+              hunt: quest as unknown as Hunt,
+              steps: generateMockSteps(questId),
+              loading: false,
+            }));
+          } else {
+            setState((prev) => ({
+              ...prev,
+              hunt: getMockQuest(questId),
+              steps: generateMockSteps(questId),
+              loading: false,
+            }));
+          }
+        }
+      } catch {
+        if (!cancelled) {
           setState((prev) => ({
             ...prev,
             hunt: getMockQuest(questId),
@@ -60,17 +75,14 @@ export default function QuestDetailPage() {
             loading: false,
           }));
         }
-      } catch {
-        setState((prev) => ({
-          ...prev,
-          hunt: getMockQuest(questId),
-          steps: generateMockSteps(questId),
-          loading: false,
-        }));
       }
     }
 
     void loadQuest();
+
+    return () => {
+      cancelled = true;
+    };
   }, [questId]);
 
   const handleStepComplete = useCallback(

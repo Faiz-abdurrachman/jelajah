@@ -110,10 +110,10 @@ export default function DisputeDetailPage() {
     );
   }
 
-  if (!dispute) {
-    return (
-      <RequireLevel level={3}>
-        <div className="container max-w-3xl mx-auto py-8 px-4">
+  return (
+    <RequireLevel level={3}>
+      <div className="container max-w-3xl mx-auto py-8 px-4 space-y-6">
+        {!dispute ? (
           <Card>
             <CardContent className="p-6 text-center">
               <Scale className="size-8 mx-auto text-muted-foreground mb-2" />
@@ -126,26 +126,18 @@ export default function DisputeDetailPage() {
               </Link>
             </CardContent>
           </Card>
-        </div>
-      </RequireLevel>
-    );
-  }
-
-  const StatusIcon = STATUS_ICON[dispute.status] ?? Clock;
-
-  return (
-    <RequireLevel level={3}>
-      <div className="container max-w-3xl mx-auto py-8 px-4 space-y-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/verify"
-            className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <ArrowLeft className="size-4" />
-            Back
-          </Link>
-          <h1 className="text-2xl font-bold">Dispute #{dispute.id}</h1>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/verify"
+                className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <ArrowLeft className="size-4" />
+                Back
+              </Link>
+              <h1 className="text-2xl font-bold">Dispute #{dispute.id}</h1>
+            </div>
 
         <Card>
           <CardContent className="p-6 space-y-4">
@@ -159,7 +151,12 @@ export default function DisputeDetailPage() {
                 </div>
               </div>
               <Badge className={STATUS_COLOR[dispute.status]}>
-                <StatusIcon className="size-3 mr-1" />
+                <span className="size-3 mr-1">
+                  {(() => {
+                    const Icon = STATUS_ICON[dispute.status] ?? Clock;
+                    return <Icon className="size-3" />;
+                  })()}
+                </span>
                 {dispute.status.charAt(0).toUpperCase() + dispute.status.slice(1)}
               </Badge>
             </div>
@@ -249,6 +246,8 @@ export default function DisputeDetailPage() {
             disputeId={String(dispute.id)}
             onAppealSubmitted={() => setShowAppeal(false)}
           />
+        )}
+          </>
         )}
       </div>
     </RequireLevel>

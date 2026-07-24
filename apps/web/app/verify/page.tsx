@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { RequireLevel } from "@/components/feature-gate";
 import { VerifierStats } from "@/components/dispute/verifier-stats";
 import { DisputeList } from "@/components/dispute/dispute-list";
@@ -40,7 +40,6 @@ export default function VerifyPage() {
   const [selectedDispute, setSelectedDispute] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
-  const initializedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +87,6 @@ export default function VerifyPage() {
         if (!cancelled) setIsVerifier(false);
       } finally {
         if (!cancelled) setLoading(false);
-        if (!cancelled) initializedRef.current = true;
       }
     }
 

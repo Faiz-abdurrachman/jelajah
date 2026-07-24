@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Compass, MapPin, Trophy, Gift, Star, User } from "lucide-react";
 import { getCommunityActivities, subscribeToCommunityActivities } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+import { cn, getTimeAgo } from "@/lib/utils";
 
 interface Activity {
   id: number;
@@ -139,16 +139,4 @@ export function ActivityFeed() {
       })}
     </div>
   );
-}
-
-function getTimeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
 }

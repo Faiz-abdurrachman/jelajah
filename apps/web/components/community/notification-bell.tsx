@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bell, Trophy, MapPin, ShieldCheck, Gift, X } from "lucide-react";
 import { subscribeToNotifications } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+import { cn, getTimeAgo } from "@/lib/utils";
 
 interface Notification {
   id: number;
@@ -138,14 +138,4 @@ export function NotificationBell() {
       )}
     </div>
   );
-}
-
-function getTimeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return date.toLocaleDateString();
 }
