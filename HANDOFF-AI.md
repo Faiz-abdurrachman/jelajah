@@ -72,15 +72,18 @@ eslint --max=0     ✅ 0 errors, 0 warnings
 next build         ✅ 13 routes
 @ts-ignore         ✅ 0 hits
 as any             ✅ 0 hits
-playwright         ✅ 10/10 passing
+playwright         ✅ 10/10 passing (8.7s)
 git status         ✅ Clean
 ```
 
 ---
 
-## 6. Git Log (this session — 12 commits)
+## 6. Git Log (this session — 16 commits)
 
 ```
+0162cfc docs: add mobile responsive screenshots, e2e test results, and CI/CD section to README
+91e3c02 docs: add screenshots and contract transaction hash to README for submission checklist
+1f523bc docs: rewrite handoff with full session context, bug history, solutions, checkpoints, and next plan
 b7af886 test: fix e2e test selectors to match actual page content
 eae2ed3 feat: add leaflet openstreetmap fallback when mapbox token is not set
 893849e fix: skip freighter isConnected check, call requestAccess directly for v6 compatibility
@@ -387,6 +390,20 @@ Current: `NEXT_PUBLIC_CURRENT_LEVEL=2` in `.env.local`
 - Set `NEXT_PUBLIC_CURRENT_LEVEL=6`
 - Security audit
 - Anchor integration
+
+### Submission Evidence (DONE in this session)
+- ✅ 8 desktop screenshots in `public/screenshots/`
+- ✅ 6 mobile screenshots (375px) in `public/screenshots/mobile-*.png`
+- ✅ E2E tests: 10/10 passing (8.7s)
+- ✅ Transaction hash: `0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2` ([Explorer](https://stellar.expert/explorer/testnet/tx/0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2))
+- ✅ CI/CD: `.github/workflows/ci.yml` (tsc → eslint → build)
+- ✅ Updated README with all screenshots, test results, CI/CD section
+
+### What User Must Do (can't do from terminal)
+1. **Push**: `git push origin main`
+2. **CI/CD screenshot**: After push, screenshot GitHub Actions workflow passing
+3. **Deploy Vercel**: Import repo, set env vars, deploy → get live URL
+4. **Demo video**: Record 1-2 min with Loom/OBS showing all flows
 
 ---
 
