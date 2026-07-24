@@ -2,11 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Navigation } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { MAP_CONFIG } from "@/config/constants";
 import type { Hunt, HuntMarker, MapCoordinates } from "@/types";
+
+const LeafletFallback = dynamic(
+  () => import("./leaflet-fallback").then((m) => ({ default: m.LeafletFallback })),
+  { ssr: false }
+);
 
 interface HuntMapProps {
   hunts?: HuntMarker[];
@@ -157,38 +163,12 @@ export function HuntMap({
 
   return (
     <div className={`relative flex-1 ${className}`}>
-      <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/30">
-        <div className="absolute inset-0 opacity-[0.03]">
-          <div
-            className="size-full"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)",
-              backgroundSize: "40px 40px",
-            }}
-          />
-        </div>
-        <MapPin className="relative z-10 size-12 text-muted-foreground mb-4" />
-        <h2 className="relative z-10 text-xl font-semibold mb-2">Peta Hunt</h2>
-        <p className="relative z-10 text-muted-foreground text-sm mb-6 max-w-md text-center">
-          Mapbox akan tampil di sini. Setup MAPBOX_TOKEN di .env.local untuk
-          mengaktifkan.
-        </p>
-        <div className="relative z-10 flex gap-3">
-          <Button variant="outline" size="sm" disabled>
-            Filter
-          </Button>
-          <Button variant="outline" size="sm" disabled>
-            List View
-          </Button>
-          {isConnected && (
-            <Button size="sm" onClick={() => router.push("/hunt/create")}>
-              Buat Hunt
-            </Button>
-          )}
-        </div>
-      </div>
-      <InfoBar />
+      <LeafletFallback
+        hunts={hunts}
+        onHuntClick={onHuntClick}
+        isConnected={isConnected}
+        onBuatHunt={() => router.push("/hunt/create")}
+      />
     </div>
   );
 }
@@ -246,7 +226,7 @@ async function loadMBGL(): Promise<MBGL> {
       resolve((window as unknown as Record<string, unknown>).mapboxgl as MBGL);
     };
 
-    script.onerror = () => reject(new Error("Gagal memuat Mapbox dari CDN"));
-    document.head.appendChild(script);
+  script.onerror = () => reject(new Error("Gagal memuat Mapbox dari CDN"));
+  document.head.appendChild(script);
   });
 }
