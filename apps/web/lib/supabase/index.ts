@@ -14,6 +14,7 @@ export {
   getBrandProfile,
   getHuntById,
   applyAsVerifier,
+  registerBrand,
   subscribeToCommunityActivities,
 } from "./client";
 export type { Database } from "./types";

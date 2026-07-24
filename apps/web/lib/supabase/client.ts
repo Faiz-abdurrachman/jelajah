@@ -238,6 +238,26 @@ export async function getBrandProfile(publicKey: string) {
 }
 
 /**
+ * Register a new brand.
+ */
+export async function registerBrand(publicKey: string, companyName: string) {
+  const { data, error } = await supabase
+    .from("brands")
+    .insert({
+      public_key: publicKey,
+      company_name: companyName,
+      subscription_tier: "basic",
+      total_campaigns: 0,
+      total_spent: 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Register a user as a verifier.
  */
 export async function applyAsVerifier(publicKey: string) {

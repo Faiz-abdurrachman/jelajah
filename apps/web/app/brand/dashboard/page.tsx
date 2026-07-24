@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { RequireLevel } from "@/components/feature-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Plus } from "lucide-react";
 import { useWallet } from "@/components/wallet/wallet-provider";
-import { getBrandProfile } from "@/lib/supabase/client";
+import { getBrandProfile, registerBrand } from "@/lib/supabase/client";
 import { BrandDashboard } from "@/components/brand/brand-dashboard";
 import { CampaignCreate } from "@/components/brand/campaign-create";
 import type { Brand } from "@/types";
@@ -33,19 +33,7 @@ export default function BrandDashboardPage() {
         if (!cancelled) {
           setIsBrand(!!profile);
           setBrandData(profile ? brandRowToData(profile) : null);
-}
-
-function brandRowToData(brand: Brand): Record<string, unknown> {
-  const raw = brand as unknown as Record<string, unknown>;
-  return {
-    company_name: brand.companyName,
-    subscription_tier: brand.subscriptionTier,
-    subscription_start: raw.subscription_start ?? null,
-    subscription_end: brand.subscriptionEnd,
-    total_campaigns: brand.totalCampaigns,
-    total_spent: raw.total_spent ?? 0,
-  };
-}
+        }
       } catch {
         if (!cancelled) setIsBrand(false);
       } finally {
@@ -55,6 +43,17 @@ function brandRowToData(brand: Brand): Record<string, unknown> {
 
     void load();
     return () => { cancelled = true; };
+  }, [publicKey]);
+
+  const handleRegisterBrand = useCallback(async () => {
+    if (!publicKey) return;
+    try {
+      const result = await registerBrand(publicKey, "My Brand");
+      setIsBrand(true);
+      setBrandData(brandRowToData(result as unknown as Brand));
+    } catch {
+      // silently fail - retry on next load
+    }
   }, [publicKey]);
 
   if (loading) {
@@ -110,7 +109,9 @@ function brandRowToData(brand: Brand): Record<string, unknown> {
                   Create campaigns and engage your audience with location-based hunts.
                 </p>
               </div>
-              <Button size="lg">Register as Brand</Button>
+              <Button size="lg" onClick={handleRegisterBrand}>
+                Register as Brand
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -128,4 +129,16 @@ function brandRowToData(brand: Brand): Record<string, unknown> {
       </div>
     </RequireLevel>
   );
+}
+
+function brandRowToData(brand: Brand): Record<string, unknown> {
+  const raw = brand as unknown as Record<string, unknown>;
+  return {
+    company_name: brand.companyName,
+    subscription_tier: brand.subscriptionTier,
+    subscription_start: raw.subscription_start ?? null,
+    subscription_end: brand.subscriptionEnd,
+    total_campaigns: brand.totalCampaigns,
+    total_spent: raw.total_spent ?? 0,
+  };
 }
