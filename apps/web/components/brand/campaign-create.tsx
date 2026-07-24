@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, ArrowLeft, Check, Clock, DollarSign } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Clock, DollarSign, Loader2 } from "lucide-react";
+import { useWallet } from "@/components/wallet/wallet-provider";
+import { createCampaign } from "@/lib/supabase/client";
 
 interface CampaignCreateProps {
   onCreated: () => void;
@@ -37,8 +39,11 @@ const STEPS = [
 ];
 
 export function CampaignCreate({ onCreated, onCancel }: CampaignCreateProps) {
+  const { publicKey } = useWallet();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<CampaignForm>(INITIAL_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const updateField = (field: keyof CampaignForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -61,8 +66,25 @@ export function CampaignCreate({ onCreated, onCancel }: CampaignCreateProps) {
     if (step > 0) setStep(step - 1);
   };
 
-  const handleSubmit = () => {
-    onCreated();
+  const handleSubmit = async () => {
+    if (!publicKey) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createCampaign({
+        brandPubkey: publicKey,
+        name: form.name,
+        description: form.description || null,
+        budget: parseFloat(form.budget) || 0,
+        startDate: form.startDate,
+        endDate: form.endDate,
+      });
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal membuat campaign.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -191,13 +213,20 @@ export function CampaignCreate({ onCreated, onCancel }: CampaignCreateProps) {
                 <ArrowRight className="size-4 ml-2" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit}>
-                <Check className="size-4 mr-2" />
+              <Button onClick={handleSubmit} disabled={submitting || !publicKey}>
+                {submitting ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="size-4 mr-2" />
+                )}
                 Create Campaign
               </Button>
             )}
           </div>
         </div>
+        {error && (
+          <p className="text-sm text-destructive bg-destructive/10 rounded-md p-2">{error}</p>
+        )}
       </CardContent>
     </Card>
   );
