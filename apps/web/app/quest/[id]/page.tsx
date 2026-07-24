@@ -52,14 +52,21 @@ export default function QuestDetailPage() {
 
         if (!cancelled) {
           if (quest) {
-            const steps = generateMockSteps(questId);
-            // Attempt contract call for real steps — fallback to mock on failure
+            let steps: QuestStep[] = [];
+
             try {
-              const contractSteps = await getQuestStepsTx(publicKey ?? "", questId.padEnd(64, "0").slice(0, 64));
-              if (contractSteps.success) {
-                // steps from contract would be decoded here in future
+              const contractSteps = await getQuestStepsTx(
+                publicKey ?? "",
+                questId.padEnd(64, "0").slice(0, 64)
+              );
+              if (contractSteps.success && contractSteps.result) {
+                // Attempt to decode steps from contract response if available
+                // Contract returns Vec<Step> — decoding depends on contract schema
+                // For now, steps remain empty until contract is fully wired
               }
-            } catch { /* use mock steps */ }
+            } catch {
+              // Contract call failed — steps remain empty
+            }
 
             setState((prev) => ({
               ...prev,
@@ -183,6 +190,14 @@ export default function QuestDetailPage() {
               onQuestClaimed={handleQuestClaimed}
             />
 
+            {steps.length === 0 && (
+              <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+                <CardContent className="p-4 text-center text-sm text-amber-700 dark:text-amber-400">
+                  Quest steps belum tersedia on-chain. Contract perlu diinisialisasi dengan data steps terlebih dahulu.
+                </CardContent>
+              </Card>
+            )}
+
             {!isConnected && (
               <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
                 <CardContent className="p-4 text-center text-sm text-amber-700 dark:text-amber-400">
@@ -219,34 +234,4 @@ function mapSupabaseToHunt(row: Record<string, unknown>): Hunt {
     photoCid: (row.photo_cid as string) ?? null,
     createdAt: row.created_at as string,
   };
-}
-
-function generateMockSteps(questId: string): QuestStep[] {
-  const hash = questId.padStart(64, "0").slice(0, 64);
-  return [
-    {
-      stepNumber: 0,
-      clueHash: hash.slice(0, 32) + "a".repeat(32),
-      gpsLat: -6.2088,
-      gpsLng: 106.8456,
-      radius: 50,
-      isFinal: false,
-    },
-    {
-      stepNumber: 1,
-      clueHash: hash.slice(0, 32) + "b".repeat(32),
-      gpsLat: -6.1754,
-      gpsLng: 106.8272,
-      radius: 50,
-      isFinal: false,
-    },
-    {
-      stepNumber: 2,
-      clueHash: hash.slice(0, 32) + "c".repeat(32),
-      gpsLat: -6.1864,
-      gpsLng: 106.8238,
-      radius: 50,
-      isFinal: true,
-    },
-  ];
 }
