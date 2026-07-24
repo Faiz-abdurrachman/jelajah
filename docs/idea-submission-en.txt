@@ -163,19 +163,6 @@
      - On-chain verification via contract call after submission
      - Anti-cheat: multi-factor location verification
 
-6. ROADMAP ───────────────────────────────────────────────────────────────────
-
-  ┌──────────┬──────────────────────────────────────────────────────────────┐
-  │ Level    │ Milestone                                                    │
-  ├──────────┼──────────────────────────────────────────────────────────────┤
-  │ L1 ████  │ Landing, Map, Wallet, Profile (✅ Complete)                  │
-  │ L2 ████  │ Create Hunt, Claim Hunt (✅ Complete, contracts deployed)   │
-  │ L3 ████  │ Quest Chain, Verifier, Dispute, Settings (⬜ In Progress)   │
-  │ L4 ████  │ Brand Dashboard, Campaign Tools, Leaderboard                 │
-  │ L5 ████  │ 50 users, Community Feed, Streaks, Badges                   │
-  │ L6 ████  │ Mainnet, Security Audit, 10+ real users                    │
-  │ L7 ████  │ API/SDK, SCF Grant, Enterprise Partnership                 │
-  └──────────┴──────────────────────────────────────────────────────────────┘
 
   MVP (Current — L1-L2):
   ✅ Landing page + Connect Wallet (Freighter)
@@ -186,7 +173,7 @@
   ✅ 5 Smart Contracts deployed on Stellar Testnet
   ✅ Soroban SDK helpers + IPFS Pinata service
 
-  User Acquisition (L3-L5):
+  User Acquisition :
   ⬜ Quest Chain: multi-step hunt experience
   ⬜ Verifier System: incentivized dispute resolution
   ⬜ Brand Dashboard: campaign tools for SMEs
@@ -194,7 +181,7 @@
   ⬜ Community Feed: real-time activity feed
   ⬜ Target: 10-50 users on testnet
 
-  Mainnet Vision (L6-L7):
+  Mainnet Vision :
   ⬜ Mainnet migration — change env testnet → mainnet
   ⬜ Smart contract security audit
   ⬜ Anchor integration: withdraw to bank accounts

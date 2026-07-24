@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, ThumbsUp, ThumbsDown, Loader2, Eye, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { commitVoteTx, revealVoteTx } from "@/lib/stellar/soroban";
+import { commitVoteTx, revealVoteTx, computeVoteHash } from "@/lib/stellar/soroban";
 
 type VotePhase = "idle" | "committed" | "revealed";
 
@@ -25,7 +25,7 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
   const [pendingVote, setPendingVote] = useState<boolean | null>(null);
 
   const generateSalt = useCallback((): string => {
-    const arr = new Uint8Array(16);
+    const arr = new Uint8Array(32);
     crypto.getRandomValues(arr);
     return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
   }, []);
@@ -41,7 +41,8 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
       setPendingVote(vote);
 
       try {
-        const result = await commitVoteTx(publicKey, disputeId, newSalt.padEnd(64, "0").slice(0, 64));
+        const voteHash = await computeVoteHash(publicKey, vote, newSalt);
+        const result = await commitVoteTx(publicKey, disputeId, voteHash);
         if (result.success) {
           setPhase("committed");
         } else {
@@ -62,7 +63,7 @@ export function VotePanel({ disputeId, onVoteSubmitted }: VotePanelProps) {
     setError(null);
 
     try {
-      const result = await revealVoteTx(publicKey, disputeId, pendingVote, salt.padEnd(64, "0").slice(0, 64));
+      const result = await revealVoteTx(publicKey, disputeId, pendingVote, salt);
       if (result.success) {
         setPhase("revealed");
         onVoteSubmitted();

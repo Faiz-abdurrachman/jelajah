@@ -1,6 +1,5 @@
 // JELAJAH — Soroban SDK Helpers
-import { rpc, TransactionBuilder, Contract, Address, nativeToScVal, scValToNative, Networks } from "@stellar/stellar-sdk";
-import type { xdr } from "@stellar/stellar-sdk";
+import { rpc, TransactionBuilder, Contract, Address, nativeToScVal, scValToNative, Networks, xdr } from "@stellar/stellar-sdk";
 import { CONTRACTS } from "@/config/contracts";
 
 export interface TxResult { hash: string; success: boolean; result?: string; error?: string; }
@@ -74,6 +73,21 @@ export function toScBool(val: boolean): xdr.ScVal {
 }
 
 export function fromScVal(val: xdr.ScVal): unknown { return scValToNative(val); }
+
+export async function computeVoteHash(pubKey: string, vote: boolean, saltHex: string): Promise<string> {
+  const verifierScVal = Address.fromString(pubKey).toScVal();
+  const voteScVal = nativeToScVal(vote);
+  const saltBuf = Buffer.from(saltHex, "hex");
+  if (saltBuf.length !== 32) throw new Error("Salt must be 32 bytes");
+  const saltScVal = nativeToScVal(saltBuf);
+
+  const vecScVal = xdr.ScVal.scvVec([verifierScVal, voteScVal, saltScVal]);
+  const xdrBytes = vecScVal.toXDR();
+  const xdrArrayBuf = xdrBytes.buffer.slice(xdrBytes.byteOffset, xdrBytes.byteOffset + xdrBytes.byteLength) as ArrayBuffer;
+
+  const hashBuf = await crypto.subtle.digest("SHA-256", xdrArrayBuf);
+  return Array.from(new Uint8Array(hashBuf), (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export async function createHuntTx(
   pubKey: string, amountStroops: bigint, gpsLat: number, gpsLng: number,
