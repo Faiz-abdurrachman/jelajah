@@ -1,17 +1,18 @@
-# JELAJAH — Handoff untuk AI Berikutnya
+# JELAJAH — Handoff untuk AI Berikutnya (v2)
 
-> Prompt ini adalah **full context transfer**. Baca SEBELUM nulis 1 baris kode pun.
+> **Full context transfer**. Baca SELURUH file ini sebelum nulis 1 baris kode.
+> Ini hasil dari multiple AI session. Jangan ulangi kesalahan yang udah disolve.
 
 ---
 
 ## 1. Siapa Lo
 
-Lo adalah **Sisyp-Sr** — Senior Full-Stack + Blockchain Engineer. Lo kerja di project **JELAJAH** — real-world treasure hunt platform di Stellar blockchain.
+Lo adalah **Senior Full-Stack + Blockchain Engineer** di project **JELAJAH** — real-world treasure hunt platform di Stellar blockchain.
 
 **Bahasa:**
-- Kode → English (variable, function, comment, commit messages)
+- Kode → English (variable, function, comment, commit)
 - Dokumentasi → Indonesian
-- Komunikasi dengan user → Indonesian
+- Komunikasi user → Indonesian
 
 ---
 
@@ -20,239 +21,342 @@ Lo adalah **Sisyp-Sr** — Senior Full-Stack + Blockchain Engineer. Lo kerja di 
 | Item | Value |
 |---|---|
 | **Nama** | JELAJAH |
-| **Tagline** | "Hidden. Hunted. Claimed." |
 | **Stack** | Next.js 16 + React 19 + TypeScript 5 + Tailwind 4 + shadcn/ui |
 | **Blockchain** | Stellar (Soroban SDK 27.0.2, Soroban CLI 27.0.0) |
-| **Database** | Supabase (17 tables, realtime subscriptions) |
-| **Map** | Mapbox GL JS (CDN fallback, token optional) |
-| **Wallet** | Freighter API (multi-wallet via Stellar Wallets Kit menyusul) |
-| **Storage** | IPFS via Pinata (service siap, butuh API key) |
-| **Smart Contract** | 5 Rust contracts — deployed to testnet |
+| **Database** | Supabase (17 tables, realtime, project: `vzohtezrdhselrommvcm`) |
+| **Map** | Mapbox (needs token) + Leaflet/OpenStreetMap fallback (no token) |
+| **Wallet** | Freighter API v6 (Stellar Wallets Kit NOT installed) |
+| **Storage** | IPFS via Pinata |
+| **Smart Contract** | 5 Rust contracts deployed to **testnet** |
 | **Repo** | https://github.com/Faiz-abdurrachman/jelajah |
-
-### Filosofi Utama
-
-**BUILD ONCE FOR ALL LEVELS (L1-L7).** Bukan build step-by-step per level.
-
-- Database schema FULL dari awal (17 tabel)
-- Smart contract ditulis LENGKAP dari awal
-- Frontend routing LENGKAP dari awal (feature gate, bukan 404)
-- Yang beda antar level cuma FEATURE GATE + network (testnet → mainnet)
-
-**TIDAK ADA REFACTOR.** Tidak ada build ulang. Tidak ada kerja 2 kali.
+| **Dev server** | `cd apps/web && npm run dev` → localhost:3000 |
 
 ---
 
-## 3. Arsitektur Full
+## 3. Critical Rules — ZERO TOLERANCE
+
+| Rule | Detail |
+|---|---|
+| **NO `any`** | Never. Ever. |
+| **NO `@ts-ignore`** | Never. |
+| **NO `@ts-expect-error`** | Never. |
+| **NO magic numbers** | All in `config/constants.ts` |
+| **NO empty catch** | `catch(e) {}` = violation |
+| **NO `as` type cast** | Except `as const` or `satisfies` |
+| **Commit per fitur** | Conventional commit: `feat:` / `fix:` / `test:` / `docs:` |
+| **JANGAN `git push`** | Commit lokal aja, user yang push |
+| **Check build sebelum commit** | `tsc --noEmit` + `eslint --max-warnings=0` + `next build` |
+| **Feature gate** | `<RequireLevel level={N}>` — BUKAN 404 |
+| **Never import `isConnected` from Freighter v6** | See Bug #9 below |
+| **Comments: hanya yang necessary** | Algorithm explanation, workaround reason |
+
+---
+
+## 4. Build Verification Commands
+
+```bash
+cd apps/web
+npx tsc --noEmit                     # TypeScript check
+npx eslint . --max-warnings=0        # ESLint check
+npx next build                       # Production build
+npx playwright test --project=chromium  # E2E tests (10 tests)
+```
+
+---
+
+## 5. Current Build Status
+
+```
+tsc --noEmit       ✅ 0 errors
+eslint --max=0     ✅ 0 errors, 0 warnings
+next build         ✅ 13 routes
+@ts-ignore         ✅ 0 hits
+as any             ✅ 0 hits
+playwright         ✅ 10/10 passing
+git status         ✅ Clean
+```
+
+---
+
+## 6. Git Log (this session — 12 commits)
+
+```
+b7af886 test: fix e2e test selectors to match actual page content
+eae2ed3 feat: add leaflet openstreetmap fallback when mapbox token is not set
+893849e fix: skip freighter isConnected check, call requestAccess directly for v6 compatibility
+981f4ec fix: wallet provider isConnected returns object not boolean in freighter v6
+bc889a9 feat: wire quest chain contract helpers with mock fallback
+c3eb673 feat: wire brand registration and fix dashboard structural bug
+a116954 feat: wire verifier registration and stake contract call
+7822981 feat: seed supabase test data, wire hunt detail to real query, make ClaimHuntView accept hunt prop
+04f2ab0 fix: testnet completion - add missing supabase types, remove mock data, fix column mappings
+9dda51a feat: add CI/CD pipeline, playwright e2e tests, and mobile responsive audit
+2bbea0f fix: audit fixes - useEffect cleanup, dead code removal, RequireLevel consolidation, extract getTimeAgo
+84b711a fix: critical vote hash bug - compute sha256(xdr(verifier,vote,salt)) instead of raw salt
+```
+
+---
+
+## 7. 🐛 ALL BUGS SOLVED — Root Cause + Solution
+
+### Bug #1: Contract `panic!("string")` (17x)
+- **Root cause**: String literal instead of `panic_with_error!` macro
+- **Fix**: Replace all `panic!("...")` → `panic_with_error!(&env, Error::Variant)`
+- **Files**: All 5 contract `lib.rs` files
+
+### Bug #2: Magic number `24 * 60 * 60` (2x)
+- **Root cause**: Claim timer seconds hardcoded
+- **Fix**: Extract to `const CLAIM_TIMER_SECONDS: u64`
+
+### Bug #3: Wallet cascade render
+- **Root cause**: `setState` in `useEffect` without proper guards
+- **Fix**: `useRef` guard for `prevPubKey`
+
+### Bug #4: Soroban SDK 27 breaking changes
+- **Root cause**: Old SDK APIs (Error → ContractError, into_val → to_xdr, Hash<32> conversion, sqrt no_std)
+- **Fix**: Multiple API updates across all contracts
+
+### Bug #5: `contracts/target/` in git
+- **Fix**: Add to `.gitignore`, `git rm --cached`
+
+### Bug #6: Secrets in HANDOFF-AI.md history
+- **Fix**: `git filter-branch` to remove from all commits
+
+### Bug #7: `@creit.tech/stellar-wallets-kit` 30MB unused
+- **Fix**: `npm uninstall`
+
+### Bug #8: Error state not auto-cleared
+- **Fix**: Auto-clear after 5s via `useEffect` cleanup
+
+### Bug #9: 🔴 CRITICAL — Commit-Reveal Vote Hash (session ini)
+- **Root cause**: `isConnected()` in Freighter v6 returns `{ isConnected: object }`, not `boolean`. JS passed raw salt as `vote_hash`, but contract computes `sha256(xdr_encode(verifier, vote, salt))`. Hash mismatch = `InvalidReveal` every time.
+- **Fix**: 
+  1. Skip `isConnected()` entirely — call `requestAccess()` directly
+  2. Add `computeVoteHash()` using `xdr.ScVal.scvVec()` + Web Crypto `sha256`
+  3. 32-byte salt (not 16-byte) for `BytesN<32>` compatibility
+  ```typescript
+  // computeVoteHash in lib/stellar/soroban.ts
+  const vecScVal = xdr.ScVal.scvVec([verifierScVal, voteScVal, saltScVal]);
+  const xdrBytes = vecScVal.toXDR();
+  const xdrArrayBuf = xdrBytes.buffer.slice(...) as ArrayBuffer;
+  const hashBuf = await crypto.subtle.digest("SHA-256", xdrArrayBuf);
+  ```
+
+### Bug #10: Freighter Wallet Connect not working (session ini)
+- **Root cause**: `isConnected()` returns `{ isConnected: window.freighter }` (API object = always truthy). So `requestAccess()` was never triggered.
+- **Fix**: Skip `isConnected()` call. Call `requestAccess()` directly, fallback to `getAddress()` if already authorized.
+- **NEVER import `isConnected` from Freighter v6 again.**
+
+### Bug #11: Mapbox token empty — map not showing (session ini)
+- **Root cause**: `NEXT_PUBLIC_MAPBOX_TOKEN=` empty in `.env.local`
+- **Fix**: Added Leaflet + OpenStreetMap fallback (free, no token). Component in `components/map/leaflet-fallback.tsx`, dynamically imported with `ssr: false`.
+
+### Bug #12: `brandRowToData` inserted inside useEffect (session ini)
+- **Root cause**: Edit placed function definition inside useEffect body, breaking the try/catch structure
+- **Fix**: Rewrote entire file, moved function to module level
+
+### Bug #13: Supabase types only 7/17 tables (session ini)
+- **Root cause**: Missing 10 table type definitions
+- **Fix**: Added all 17 tables to `lib/supabase/types.ts`
+
+### Bug #14: Community activities wrong column names (session ini)
+- **Root cause**: Component used `type`/`title`/`message` but schema has `activity_type`/`description`
+- **Fix**: Updated mapping in `activity-feed.tsx` to use correct columns
+
+---
+
+## 8. Smart Contracts — Testnet
+
+| Contract | Address |
+|---|---|
+| **hunt-factory** | `CDJLNOVGLXU4FLUWX7TLYER25UET5YNXPYI3TBNNSBWFDBZ5E6SLILF3` |
+| **hunt-instance** | WASM uploaded (factory deploys instances) — hash: `8e292f95...` |
+| **reputation** | `CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3` |
+| **dispute** | `CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB` |
+| **quest-chain** | `CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ` |
+
+---
+
+## 9. Supabase — Seed Data
+
+| Table | Count | Notes |
+|---|---|---|
+| users | 3 | Budi Hunter (2500xp), Sita Hider (1200xp), Veri Master (5000xp) |
+| hunts | 3 | GPS Monas, Puzzle Bundaran HI, Quest Chain Jakarta |
+| claims | 1 | Budi claims GPS hunt (pending) |
+| disputes | 1 | Hider rejects claim (voting) |
+| verifiers | 2 | Veri Master, Budi Hunter |
+| brands | 1 | Sita Adventures (pro tier) |
+| community_activities | 5 | Various activities for feed demo |
+
+---
+
+## 10. Routes & Status (13 routes)
+
+### ✅ REAL DATA (Supabase)
+| Route | Level | Status | Real Data? |
+|---|---|---|---|
+| `/` | L1 | ✅ | N/A (static) |
+| `/map` | L1 | ✅ | Leaflet OSM + Supabase marker |
+| `/profile` | L1 | ✅ | Supabase user |
+| `/wallet` | L1 | ✅ | Horizon API real |
+| `/hunt/[id]` | L2 | ✅ | Supabase hunt by ID |
+| `/leaderboard` | L4 | ✅ | Supabase users ranked |
+| `/community` | L5 | ✅ | Supabase activities + realtime |
+
+### ⚠️ MOCK/FALLBACK
+| Route | Level | Status | Issue |
+|---|---|---|---|
+| `/hunt/create` | L2 | ⚠️ | UI works, `createHuntTx` is **simulate only** (not real tx) |
+| `/quest/[id]` | L3 | ⚠️ | Contract wired but `generateMockSteps()` fallback |
+| `/verify` | L3 | ⚠️ | Apply verifier works (Supabase), vote panel works (UI+contract wired), but **never tested with real tx** |
+| `/dispute/[id]` | L3 | ⚠️ | UI complete, contract wired, but **no real dispute flow tested** |
+| `/settings` | L3 | ✅ | localStorage works |
+| `/brand` | L4 | ✅ | Register works (Supabase) |
+| `/brand/dashboard` | L4 | ⚠️ | Campaign create UI not persisted |
+
+---
+
+## 11. What Needs Real Flow Testing (NOT DONE)
+
+| Flow | Status |
+|---|---|
+| Create Hunt → real tx → appear on map | ❌ simulate only |
+| Claim Hunt → GPS → photo → submit tx | ❌ MOCK_HUNT |
+| Hider approve/reject claim | ❌ No UI |
+| Dispute → commit vote → reveal vote → resolve | ❌ Never tested |
+| Stake via contract | ⚠️ Wired, not tested |
+| Quest chain complete_step → claim_quest | ❌ Mock steps |
+| Campaign create → persist to Supabase | ❌ UI only |
+
+---
+
+## 12. Architecture
 
 ```
 jelajah/
-├── apps/web/                     # Next.js 16 Frontend
-│   ├── app/
-│   │   ├── page.tsx              # Landing (L1) ✅
-│   │   ├── map/page.tsx          # Map + HuntMap component (L1) ✅
-│   │   ├── profile/page.tsx      # Profile + stats (L1) ✅
-│   │   ├── wallet/page.tsx       # Wallet + tx history (L1) ✅
+├── apps/web/
+│   ├── app/                          # 13 routes
+│   │   ├── page.tsx                  # Landing
+│   │   ├── map/page.tsx              # Map (Leaflet OSM fallback)
+│   │   ├── profile/page.tsx          # Profile
+│   │   ├── wallet/page.tsx           # Wallet + balance
 │   │   ├── hunt/
-│   │   │   ├── [id]/page.tsx     # Hunt detail + Claim flow (L2) ✅
-│   │   │   └── create/page.tsx   # Create Hunt wizard (L2) ✅
-│   │   ├── quest/[id]/           # Quest chain (L3) ⬜
-│   │   ├── dispute/[id]/         # Dispute flow (L3) ⬜
-│   │   ├── verify/               # Verifier dashboard (L3) ⬜
-│   │   ├── settings/             # Settings (L3) ⬜
-│   │   ├── brand/                # Brand dashboard (L4) ⬜
-│   │   │   ├── page.tsx          # Brand landing ⬜
-│   │   │   └── dashboard/        # Brand dashboard ⬜
-│   │   ├── leaderboard/          # Leaderboard (L4) ⬜
-│   │   ├── community/            # Community feed (L5) ⬜
-│   │   └── api/                  # Developer API (L7) ⬜
+│   │   │   ├── create/page.tsx       # Create wizard
+│   │   │   └── [id]/page.tsx         # Hunt detail → ClaimHuntView
+│   │   ├── quest/[id]/page.tsx       # Quest chain (mock steps)
+│   │   ├── verify/page.tsx           # Verifier dashboard
+│   │   ├── dispute/[id]/page.tsx     # Dispute detail
+│   │   ├── settings/page.tsx         # Settings
+│   │   ├── brand/page.tsx            # Brand landing
+│   │   ├── brand/dashboard/page.tsx  # Brand dashboard
+│   │   ├── leaderboard/page.tsx      # Leaderboard
+│   │   └── community/page.tsx        # Community feed
 │   ├── components/
-│   │   ├── ui/                   # shadcn/ui (button, card, input, badge, sheet, dll)
-│   │   ├── layout/navbar.tsx     # Navbar + mobile menu ✅
-│   │   ├── map/hunt-map.tsx      # Mapbox CDN + fallback ✅
+│   │   ├── ui/                       # shadcn/ui (button, card, input, badge, sheet, separator, dropdown-menu)
+│   │   ├── layout/navbar.tsx         # Navbar with feature-gated links
+│   │   ├── map/
+│   │   │   ├── hunt-map.tsx          # Mapbox (token) + Leaflet fallback
+│   │   │   └── leaflet-fallback.tsx  # OSM map (dynamic import, ssr:false)
 │   │   ├── hunt/
-│   │   │   ├── create-hunt-wizard.tsx  # 6-step wizard ✅
-│   │   │   └── claim-hunt-view.tsx     # GPS + foto + submit ✅
-│   │   ├── wallet/wallet-provider.tsx  # Freighter + Horizon ✅
-│   │   └── feature-gate/         # RequireLevel component ✅
+│   │   │   ├── create-hunt-wizard.tsx # 6-step wizard (Type→Clue→GPS→Reward→Deadline→Review)
+│   │   │   └── claim-hunt-view.tsx    # MOCK_HUNT fallback, accepts hunt prop
+│   │   ├── quest/
+│   │   │   ├── quest-progress.tsx     # Step timeline
+│   │   │   └── quest-step-view.tsx    # Per-step GPS+photo
+│   │   ├── dispute/
+│   │   │   ├── dispute-list.tsx       # Dispute table
+│   │   │   ├── dispute-result.tsx     # Vote results
+│   │   │   ├── vote-panel.tsx         # Commit-reveal voting
+│   │   │   ├── stake-manage.tsx       # Stake form (wired to contract)
+│   │   │   ├── verifier-stats.tsx     # Stats cards
+│   │   │   └── appeal-form.tsx        # Appeal form
+│   │   ├── brand/
+│   │   │   ├── brand-dashboard.tsx    # Brand stats
+│   │   │   └── campaign-create.tsx    # Campaign wizard
+│   │   ├── leaderboard/
+│   │   │   └── leaderboard-table.tsx  # Ranked table
+│   │   ├── community/
+│   │   │   ├── activity-feed.tsx      # Realtime feed
+│   │   │   └── notification-bell.tsx  # Notification dropdown
+│   │   ├── wallet/
+│   │   │   └── wallet-provider.tsx    # Freighter v6 (NO isConnected import!)
+│   │   └── feature-gate/
+│   │       └── require-level.tsx      # <RequireLevel level={N}>
 │   ├── config/
-│   │   ├── constants.ts          # Magic numbers, rules ✅
-│   │   ├── contracts.ts          # Contract addresses ✅
-│   │   ├── levels.ts             # Feature gate definitions ✅
-│   │   └── hunt-types.ts         # HuntType enum + helpers ✅
+│   │   ├── constants.ts               # All magical numbers
+│   │   ├── contracts.ts               # Contract addresses
+│   │   ├── levels.ts                  # Feature gate definitions
+│   │   └── hunt-types.ts              # HuntType enum
 │   ├── lib/
-│   │   ├── stellar/soroban.ts    # Soroban SDK helpers ✅
-│   │   ├── ipfs/pinata.ts        # IPFS Pinata upload ✅
-│   │   ├── supabase/             # Client + queries + types ✅
-│   │   └── utils.ts              # cn() helper ✅
-│   └── types/index.ts            # TypeScript types ✅
-├── contracts/                    # Rust Soroban Contracts
-│   ├── Cargo.toml                # Workspace
-│   ├── hunt-factory/             # Factory contract — deployed ✅
-│   ├── hunt-instance/            # Full lifecycle — WASM uploaded ✅
-│   ├── reputation/               # XP + level + badges — deployed ✅
-│   ├── dispute/                  # Multi-sig voting — deployed ✅
-│   └── quest-chain/              # Multi-step quests — deployed ✅
-├── docs/                         # Dokumentasi lengkap (8 file)
-├── .env.local                    # Environment (jangan commit! ada di .gitignore)
-├── HANDOFF-AI.md                 # ← lo baca ini
-├── JELAJAH-HANDOFF.md            # Handoff asli (placeholder — isi lama)
-├── PLAN.md                       # Build plan
-└── .omo/plans/fase-02-l3-infra-deploy.md  # Plan detail L3 + infra
+│   │   ├── stellar/soroban.ts         # Soroban SDK helpers (all tx functions)
+│   │   ├── ipfs/pinata.ts             # IPFS upload
+│   │   ├── supabase/
+│   │   │   ├── client.ts              # All queries (getOrCreate, getHuntById, applyAsVerifier, registerBrand, etc.)
+│   │   │   ├── types.ts               # 17/17 tables typed
+│   │   │   └── schema.sql             # Full schema
+│   │   ├── mapbox/                    # Mapbox helpers (not used when no token)
+│   │   └── utils.ts                   # cn(), getTimeAgo()
+│   ├── types/index.ts                 # Shared TypeScript types
+│   ├── e2e/                           # Playwright tests (10 passing)
+│   │   ├── landing.spec.ts
+│   │   ├── map.spec.ts
+│   │   └── hunt-flow.spec.ts
+│   └── playwright.config.ts
+├── contracts/                         # 5 Rust Soroban contracts
+│   ├── hunt-factory/
+│   ├── hunt-instance/
+│   ├── reputation/
+│   ├── dispute/
+│   └── quest-chain/
+├── .github/workflows/ci.yml           # CI/CD: tsc → eslint → build
+├── docs/                              # Dokumentasi (8 files)
+└── .env.local                         # Environment variables
 ```
 
 ---
 
-## 4. Commit History (11 commits)
+## 13. Key Files to Read First
 
-| Hash | Message | File |
+| Priority | File | Why |
 |---|---|---|
-| `ccb22f1` | `feat: init next.js project with tailwind, shadcn/ui, wallet provider and feature gate` | 50 files |
-| `748153b` | `feat: complete phase 0 foundation - contracts, db schema, configs, ui` | 16 files |
-| `f85de25` | `feat: migrate from local postgres to supabase with realtime support` | 7 files |
-| `f65b536` | `feat: setup supabase project cariin with full jelajah schema (17 tables)` | 1 file |
-| `99120c4` | `fix: audit fixes - panic_with_error, cascade render, unused deps, gitignore, error handling` | 16 files |
-| `bcd8e10` | `feat: fix smart contracts for soroban sdk 27 and add contracts/target to gitignore` | 9 files |
-| `d266ce7` | `feat: add create hunt wizard, claim hunt view, and mapbox map component` | 6 files |
-| `eabb9d4` | `feat: add soroban sdk helpers, ipfs upload service, and wire create hunt to contract` | 3 files |
-| `9347440` | `feat: wire claim hunt flow to contract and ipfs upload` | 1 file |
-| `9b5a348` | `feat: deploy 5 smart contracts to testnet and update config` | 2 files |
+| 1 | `lib/stellar/soroban.ts` | All contract helpers (createHuntTx, submitClaimTx, completeStepTx, commitVoteTx, revealVoteTx, stakeTx, computeVoteHash, etc.) |
+| 2 | `lib/supabase/client.ts` | All Supabase queries |
+| 3 | `components/wallet/wallet-provider.tsx` | Freighter v6 connection (NO isConnected!) |
+| 4 | `config/constants.ts` | All rules, fees, thresholds |
+| 5 | `config/levels.ts` | Feature gate definitions |
+| 6 | `types/index.ts` | Shared types |
+| 7 | `components/map/hunt-map.tsx` | Map component (Mapbox + Leaflet fallback) |
+| 8 | `components/map/leaflet-fallback.tsx` | OSM fallback (ssr:false, dynamic import) |
 
 ---
 
-## 5. Smart Contracts — Testnet (Deployed ✅)
+## 14. Soroban Contract Helpers Available
 
-| Contract | Address | Explorer |
-|---|---|---|
-| **hunt-factory** | `CDJLNOVGLXU4FLUWX7TLYER25UET5YNXPYI3TBNNSBWFDBZ5E6SLILF3` | [🔗](https://stellar.expert/explorer/testnet/contract/CDJLNOVGLXU4FLUWX7TLYER25UET5YNXPYI3TBNNSBWFDBZ5E6SLILF3) |
-| **hunt-instance** | WASM uploaded (factory deploys instances) | hash: `8e292f95...` |
-| **reputation** | `CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3` | [🔗](https://stellar.expert/explorer/testnet/contract/CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3) |
-| **dispute** | `CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB` | [🔗](https://stellar.expert/explorer/testnet/contract/CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB) |
-| **quest-chain** | `CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ` | [🔗](https://stellar.expert/explorer/testnet/contract/CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ) |
+```typescript
+// lib/stellar/soroban.ts exports:
+createHuntTx(pubKey, amountStroops, gpsLat, gpsLng, radius, deadlineUnix, clueHashHex, huntType) → TxResult
+submitClaimTx(pubKey, instanceAddr, photoCidHex, lat, lng) → TxResult
+completeStepTx(pubKey, questIdHex, step, photoCidHex) → TxResult
+claimQuestTx(pubKey, questIdHex) → TxResult
+commitVoteTx(pubKey, disputeIdHex, voteHashHex) → TxResult
+revealVoteTx(pubKey, disputeIdHex, vote, saltHex) → TxResult
+resolveDisputeTx(pubKey, disputeIdHex) → TxResult
+appealTx(pubKey, disputeIdHex) → TxResult
+stakeTx(pubKey, amount) → TxResult
+computeVoteHash(pubKey, vote, saltHex) → Promise<string>  // MUST call before commit vote
+getQuestStepsTx(pubKey, questIdHex) → TxResult
+getCurrentStepTx(pubKey, questIdHex) → TxResult
 
-### Fungsi Contract
-
-| Contract | Key Functions |
-|---|---|
-| **hunt-factory** | `create_hunt()`, `get_hunt_count()`, `get_hunt()` |
-| **hunt-instance** | `__constructor()`, `submit_claim()`, `approve()`, `reject()`, `auto_release()`, `commit_vote()`, `reveal_vote()`, `resolve_dispute()`, `claim_expired()` |
-| **reputation** | `add_xp()`, `get_level()`, `get_xp()`, `issue_badge()`, `has_badge()` |
-| **dispute** | `create_dispute()`, `commit_vote()`, `reveal_vote()`, `resolve()`, `appeal()`, `stake()`, `slash()` |
-| **quest-chain** | `set_quest_steps()`, `complete_step()`, `claim_quest()` |
-
----
-
-## 6. Bug — Solved
-
-### 6.1 Contract: `panic!("string")` (17x occurrence)
-- **Issue**: Panic with string literal instead of `panic_with_error!` macro
-- **Fix**: Replace all `panic!("...")` → `panic_with_error!(&env, Error::Variant)`
-- **File**: All 5 contract `lib.rs` files
-
-### 6.2 Contract: Magic number `24 * 60 * 60` hardcoded 2x
-- **Issue**: Claim timer seconds hardcoded in 2 places
-- **Fix**: Extract to `const CLAIM_TIMER_SECONDS: u64` at module level
-- **File**: `contracts/hunt-instance/src/lib.rs`
-
-### 6.3 Frontend: Cascade render wallet (`setState` in `useEffect`)
-- **Issue**: WalletProvider triggered multiple re-renders because `setState` was in `useEffect` without proper guards
-- **Fix**: Inline logic di effect + `useRef` guard for `prevPubKey`
-- **File**: `apps/web/components/wallet/wallet-provider.tsx`
-
-### 6.4 Contract: SDK 27 breaking changes (5 contracts affected)
-- **Issue**: Contracts written for older Soroban SDK, v27.0.2 changed APIs
-- **Fixes applied**:
-  - Rename `Error` → `ContractError` (bentrok sama SDK built-in Error type)
-  - Add `contracterror` attribute import for custom error enums
-  - Add `xdr::ToXdr` trait import untuk hashing input
-  - Replace `into_val(&env)` → `to_xdr(&env)` untuk sha256 input
-  - Fix `Hash<32>` (dari `sha256`) conversion ke `BytesN<32>` via `.into()`
-  - Fix `votes.len() - approve_count` (u32 vs usize) — cast `as u32`
-  - Fix `Vec` iterator deref — soroban SDK 27 iter yield value bukan reference
-  - Fix `sqrt()` gak available di no_std → ganti Babylonian integer sqrt
-  - Change build target from `wasm32-unknown-unknown` to `wasm32v1-none`
-  - Remove unused imports (`Map`, `Bytes`, `Vec`)
-- **File**: All 5 `contracts/*/src/lib.rs`, `Cargo.toml`
-
-### 6.5 Git: target/ tracked di git
-- **Issue**: `contracts/target/` build artifacts ikut tercommit
-- **Fix**: Tambah `target/` dan `contracts/target/` ke `.gitignore`, `git rm --cached`
-- **File**: `.gitignore`
-
-### 6.6 Git: Secrets in HANDOFF-AI.md
-- **Issue**: Supabase token dan service role key ada di commit history
-- **Fix**: `git filter-branch --index-filter` hapus `HANDOFF-AI.md` dari semua commit
-- **File**: di-rewrite dari history
-
-### 6.7 NPM: `@creit.tech/stellar-wallets-kit` 30MB+ gak dipake
-- **Issue**: Dependency besar tapi gak pernah diimport
-- **Fix**: `npm uninstall @creit.tech/stellar-wallets-kit`
-- **File**: `apps/web/package.json`
-
-### 6.8 Frontend: Error state gak ditampilkan ke user
-- **Issue**: WalletProvider simpan error state tapi gak pernah auto-clear
-- **Fix**: Auto-clear error setelah 5 detik via `useEffect` cleanup
-- **File**: `apps/web/components/wallet/wallet-provider.tsx`
-
----
-
-## 7. Critical Rules — Wajib Dibaca
-
-### RULE 1: Clean Code (ZERO TOLERANCE)
-- **NO `any`, NO `@ts-ignore`, NO `@ts-expect-error`** — ever
-- **NO magic numbers** — semua di `config/constants.ts`
-- **NO empty catch blocks** — `catch(e) {}` = pelanggaran
-- **NO `as` type casting** kecuali `as const` atau `satisfies`
-- Error handling wajib untuk semua async operation
-
-### RULE 2: Checkpoint = Commit
-Lo bakal DIGANTI AI LAIN kapan aja. Karena itu:
-- **Commit SETIAP selesai 1 fitur logis** (bisa per-file atau per-small-feature)
-- Commit message: `feat: what was done` (conventional commit)
-- **JANGAN commit**: `wip`, `update`, `fix`, `asdf`
-- **JANGAN `git push`** — cukup commit lokal (user yang push)
-- Setiap commit harus lulus `npx tsc --noEmit` + `npx eslint . --max-warnings=0` + `npx next build`
-
-### RULE 3: Feature Gate Pattern
-Semua halaman dibangun dari awal. Yang gak sesuai level di-lock, bukan 404:
-```tsx
-import { RequireLevel } from "@/components/feature-gate";
-
-export default function BrandPage() {
-  return (
-    <RequireLevel level={4}>
-      {/* konten brand dashboard */}
-    </RequireLevel>
-  );
-}
-```
-
-### RULE 4: Build Sekali untuk Semua Level
-Jangan tanya "ini buat level berapa?" — semua kode ditulis untuk full architecture dari awal. Yang ngebedain cuma feature gate + network.
-
-### RULE 5: Wallet Pattern
-Gunakan `useWallet()` hook:
-```tsx
-const { isConnected, publicKey, balance, connect, disconnect } = useWallet();
-```
-
-### RULE 6: Contract Error Pattern
-Gunakan `panic_with_error!()` + `#[contracterror]` BUKAN `panic!("string")`:
-```rust
-#[contracterror]
-pub enum ContractError {
-    NotAuthorized = 1,
-}
-
-// Usage:
-panic_with_error!(&env, ContractError::NotAuthorized);
+// Converters:
+toScAddress, toScI128, toScI64, toScU32, toScU64, toScBytesN32, toScBool, fromScVal
 ```
 
 ---
 
-## 8. Level Feature Gate
+## 15. Feature Gate Levels
 
-| Level | Belt | Routes Unlocked |
+| Level | Belt | Routes |
 |---|---|---|
 | **L1** | White | `/`, `/map`, `/profile`, `/wallet` |
 | **L2** | Yellow | `/hunt/[id]`, `/hunt/create` |
@@ -262,154 +366,54 @@ panic_with_error!(&env, ContractError::NotAuthorized);
 | **L6** | Black | Mainnet migration |
 | **L7** | Master | `/api/*` |
 
-**Current level**: `L2` (NEXT_PUBLIC_CURRENT_LEVEL=2)
+Current: `NEXT_PUBLIC_CURRENT_LEVEL=2` in `.env.local`
 
 ---
 
-## 9. Routes & Pages Status
+## 16. Next Plan (Belum Dikerjakan)
 
-### L1 — White Belt (✅ Selesai)
-| Route | Page | Status |
-|---|---|---|
-| `/` | Landing + Connect Wallet | ✅ |
-| `/map` | Full-screen map (Mapbox CDN + fallback) | ✅ |
-| `/profile` | Profile + public key + stats + badges | ✅ |
-| `/wallet` | Wallet balance + tx history | ✅ |
+### Prioritas: Real Flow End-to-End
+1. **ClaimHuntView**: Ganti MOCK_HUNT → data dari Supabase + real GPS + contract submit tx
+2. **Hider approve/reject**: Bikin UI untuk approve/reject claim
+3. **Create hunt real tx**: `createHuntTx` dari simulate → send real tx + track hash
+4. **Dispute flow test**: End-to-end dari claim → reject → dispute → commit vote → reveal → resolve
+5. **Quest chain**: Hapus `generateMockSteps`, wire `get_steps()` + `get_current_step()` dari contract
+6. **Campaign persist**: Brand campaign create → insert ke Supabase
+7. **Seed more data**: Lebih banyak hunt, claim, dispute untuk testing
 
-### L2 — Yellow Belt (✅ Selesai)
-| Route | Page | Status |
-|---|---|---|
-| `/hunt/create` | 6-step wizard (type → clue → GPS → reward → deadline → review/sign) | ✅ |
-| `/hunt/[id]` | Hunt detail + GPS check + photo capture + claim submit | ✅ |
-
-### L3 — Orange Belt (⬜ Belum)
-| Route | Page | Status |
-|---|---|---|
-| `/quest/[id]` | Quest Chain (multi-step) | ⬜ |
-| `/verify` | Verifier Dashboard | ⬜ |
-| `/dispute/[id]` | Dispute Detail + Appeal | ⬜ |
-| `/settings` | Network, Language, Currency | ⬜ |
-
-### L4 — Green Belt (⬜ Belum)
-| Route | Page | Status |
-|---|---|---|
-| `/brand/*` | Brand Dashboard | ⬜ |
-| `/leaderboard` | Leaderboard | ⬜ |
-
-### L5 — Blue Belt (⬜ Belum)
-| Route | Page | Status |
-|---|---|---|
-| `/community` | Community Feed + Notifications | ⬜ |
-
-### L7 — Master Belt (⬜ Belum)
-| Route | Page | Status |
-|---|---|---|
-| `/api/*` | Developer API | ⬜ |
+### Mainnet (L6)
+- Deploy contracts ke mainnet
+- Update semua address di `config/contracts.ts`
+- Set `NEXT_PUBLIC_CURRENT_LEVEL=6`
+- Security audit
+- Anchor integration
 
 ---
 
-## 10. Build Status
+## 17. Wallet Pattern
 
-| Check | Status |
-|---|---|
-| `npx tsc --noEmit` | ✅ 0 errors |
-| `npx eslint . --max-warnings=0` | ✅ 0 errors, 0 warnings |
-| `npx next build` | ✅ Compiled, 7 routes |
-| `cargo build --target wasm32v1-none` | ✅ 5 contracts, 0 errors, warnings only |
-| `git status` | ✅ Clean working tree |
-| `grep -r "@ts-ignore" apps/web/ --include="*.ts" --include="*.tsx"` | ✅ 0 hits |
-| `grep -r "as any" apps/web/ --include="*.ts" --include="*.tsx"` | ✅ 0 hits |
+```tsx
+const { isConnected, publicKey, balance, connect, disconnect } = useWallet();
+```
+
+**CRITICAL**: JANGAN import `isConnected` dari `@stellar/freighter-api`. Gunakan `requestAccess()` + `getAddress()` dari hook. Lihat `wallet-provider.tsx`.
 
 ---
 
-## 11. Database (Supabase — 17 Tables)
+## 18. Supabase Query Pattern
 
-Semua tabel udah ada di project Supabase `jelajah` (ref: `vzohtezrdhselrommvcm`).
+```tsx
+import { getActiveHunts, getHuntById, applyAsVerifier, registerBrand } from "@/lib/supabase/client";
 
-**Tables**: `users`, `hunts`, `claims`, `disputes`, `verifiers`, `appeals`, `brands`, `campaigns`, `campaign_hunts`, `referrals`, `leaderboard_snapshots`, `streaks`, `user_badges`, `notifications`, `community_activities`, `api_keys`, `audit_log`
+// Read
+const hunts = await getActiveHunts();
+const hunt = await getHuntById(1);
 
-MCP Supabase tools: bisa query langsung via `skill_mcp`.
-
----
-
-## 12. Environment Variables (.env.local)
-
-Ada di `.env.local` (jangan commit!):
-
-```env
-NEXT_PUBLIC_NETWORK=testnet
-NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org
-NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org
-NEXT_PUBLIC_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
-
-# Contract addresses (deployed testnet)
-NEXT_PUBLIC_HUNT_FACTORY=CDJLNOVGLXU4...
-NEXT_PUBLIC_REPUTATION_CONTRACT=CDBXC2HQPL6E...
-NEXT_PUBLIC_DISPUTE_CONTRACT=CA2T25TDCILD2...
-NEXT_PUBLIC_QUEST_CHAIN_CONTRACT=CC67Y27UHKO75...
-NEXT_PUBLIC_HUNT_INSTANCE_WASM_HASH=8e292f95...
-
-NEXT_PUBLIC_CURRENT_LEVEL=2
-
-NEXT_PUBLIC_SUPABASE_URL=<supabase-url>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+// Write
+await applyAsVerifier(publicKey);
+await registerBrand(publicKey, "Company Name");
 ```
 
 ---
 
-## 13. Commands Reference
-
-```bash
-cd apps/web && npm run dev           # Development server
-npx tsc --noEmit                     # Type check
-npx eslint . --max-warnings=0        # Lint check
-npx next build                       # Full build
-cd contracts && cargo build --target wasm32v1-none  # Build contracts
-cd contracts/reputation && cargo test  # Contract tests
-git add -A && git commit -m "feat: what was done"  # Checkpoint
-```
-
----
-
-## 14. Next Steps (Dari Plan)
-
-### Batch 2: Quest Chain UI (L3)
-- `app/quest/[id]/page.tsx` + `components/quest/quest-progress.tsx`
-- Multi-step: progres timeline, GPS per step, foto per step, final claim
-- Wire ke contract `complete_step()`, `claim_quest()`
-
-### Batch 3: Verifier + Dispute (L3)
-- `app/verify/page.tsx` + `components/dispute/*`
-- Dashboard stats, dispute list, commit-reveal voting, stake management
-- `app/dispute/[id]/page.tsx` + detail + appeal form
-
-### Batch 4: Settings + Brand (L3-L4)
-- `app/settings/page.tsx` — network, language, currency
-- `app/brand/*` — register, dashboard, campaign CRUD
-
-### Batch 5: Leaderboard + Community (L4-L5)
-- `app/leaderboard/page.tsx` — hunter + hider rankings
-- `app/community/page.tsx` — activity feed, notifications
-
-### Batch 6: Infrastructure
-- GitHub Actions CI/CD
-- Playwright E2E tests
-- Mobile responsive audit
-- README.md lengkap
-
----
-
-## 15. Remote
-
-```bash
-git remote -v
-origin  https://github.com/Faiz-abdurrachman/jelajah.git (fetch)
-origin  https://github.com/Faiz-abdurrachman/jelajah.git (push)
-```
-
-Push setelah commit: `git push origin main`
-
----
-
-Good luck, Sr. 🚀 Build JELAJAH, gak ada refactor, gak ada kerja 2 kali.
+Good luck bro. Build JELAJAH, gak ada refactor, gak ada kerja 2 kali. 🚀
