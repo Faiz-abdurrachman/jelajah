@@ -1,13 +1,68 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { RequireLevel } from "@/components/feature-gate";
 import { ClaimHuntView } from "@/components/hunt/claim-hunt-view";
+import { getHuntById } from "@/lib/supabase/client";
+import type { Hunt } from "@/types";
 
 export default function HuntDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const [hunt, setHunt] = useState<Hunt | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const huntId = parseInt(id ?? "0", 10);
+      if (!huntId || huntId <= 0) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      try {
+        const row = await getHuntById(huntId);
+        if (cancelled) return;
+
+        if (row) {
+          setHunt({
+            id: row.id as number,
+            contractId: (row.contract_id as string) ?? null,
+            hiderPubkey: row.hider_pubkey as string,
+            huntType: row.hunt_type as Hunt["huntType"],
+            clue: row.clue as string,
+            latitude: row.latitude as number,
+            longitude: row.longitude as number,
+            radiusMeters: (row.radius_meters as number) ?? 50,
+            amountStroops: (row.amount_stroops as number) ?? null,
+            deadline: row.deadline as string,
+            status: row.status as Hunt["status"],
+            photoCid: (row.photo_cid as string) ?? null,
+            createdAt: row.created_at as string,
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => { cancelled = true; };
+  }, [id]);
+
   return (
     <RequireLevel level={2}>
       <div className="container max-w-2xl mx-auto py-8 px-4">
-        <ClaimHuntView />
+        {loading ? (
+          <div className="space-y-4 animate-pulse">
+            <div className="h-8 w-48 bg-muted rounded" />
+            <div className="h-64 bg-muted rounded-lg" />
+          </div>
+        ) : (
+          <ClaimHuntView hunt={hunt ?? undefined} />
+        )}
       </div>
     </RequireLevel>
   );

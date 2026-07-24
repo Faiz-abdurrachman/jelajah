@@ -48,7 +48,7 @@ const MOCK_HUNT: Hunt = {
   createdAt: new Date().toISOString(),
 };
 
-export function ClaimHuntView() {
+export function ClaimHuntView({ hunt: huntProp }: { hunt?: Hunt }) {
   const { isConnected, publicKey } = useWallet();
   const [phase, setPhase] = useState<ClaimPhase>("idle");
   const [currentPosition, setCurrentPosition] = useState<GeoPosition | null>(null);
@@ -60,7 +60,7 @@ export function ClaimHuntView() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
 
-  const hunt = MOCK_HUNT;
+  const hunt = huntProp ?? MOCK_HUNT;
 
   // GPS tracking
   const startGps = useCallback(() => {

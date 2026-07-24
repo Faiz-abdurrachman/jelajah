@@ -12,6 +12,7 @@ export {
   getLeaderboard,
   getCommunityActivities,
   getBrandProfile,
+  getHuntById,
   subscribeToCommunityActivities,
 } from "./client";
 export type { Database } from "./types";

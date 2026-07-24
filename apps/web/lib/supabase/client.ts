@@ -70,6 +70,19 @@ export async function getActiveHunts() {
 }
 
 /**
+ * Get a single hunt by ID with hider info.
+ */
+export async function getHuntById(huntId: number) {
+  const { data } = await supabase
+    .from("hunts")
+    .select("*, hider:users!hunts_hider_pubkey_fkey(*)")
+    .eq("id", huntId)
+    .single();
+
+  return data;
+}
+
+/**
  * Get hunts created by a specific user.
  */
 export async function getUserHunts(publicKey: string) {
