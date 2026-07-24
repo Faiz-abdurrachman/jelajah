@@ -1,0 +1,208 @@
+================================================================================
+  IDEA SUBMISSION — JELAJAH
+  English Version
+================================================================================
+  Real-World Treasure Hunt Platform on Stellar Blockchain
+  "Hidden. Hunted. Claimed."
+================================================================================
+
+1. PROBLEM STATEMENT ───────────────────────────────────────────────────────────
+
+  Title: Bridging the Physical World with Blockchain through Real-World
+         Treasure Hunts
+
+  Problem:
+  The physical world and blockchain remain disconnected. User interaction
+  with blockchain today is limited to screens — trading, swapping, NFTs,
+  DeFi — but nothing connects physical locations with digital assets.
+
+  On the other hand, "treasure hunts" and "geocaching" exist offline, but:
+  ❌ No economic incentive — rewards are physical prizes, not digital assets
+  ❌ Centralized trust — relies entirely on the organizer
+  ❌ Not scalable — requires third-party management
+  ❌ Not transparent — no on-chain proof of who claimed what
+
+  JELAJAH solves this by creating a treasure hunt marketplace that is:
+  ✅ Trustless — rewards locked in Stellar Claimable Balances
+  ✅ Decentralized — anyone can create a hunt
+  ✅ Transparent — all events recorded on-chain
+  ✅ Real economy — hunters earn XLM/USDC, not physical prizes
+
+2. WHY STELLAR? ───────────────────────────────────────────────────────────────
+
+  Stellar is the only blockchain that natively supports JELAJAH's use case
+  without needing complex custom contracts:
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Stellar Feature     │ Why It Matters for JELAJAH                       │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Claimable Balances   │ Native escrow — funds held until conditions met.│
+  │                      │ No need for a custom escrow contract.            │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Path Payments        │ Poster pays USDC, hunter in Indonesia receives  │
+  │                      │ IDR via Anchor — 1 atomic transaction.          │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ ~$0.001 per tx       │ Viable for small hunts of $1.                   │
+  │                      │ On Ethereum, gas > reward.                       │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Native multi-sig     │ Dispute resolution: 2-of-3 verifiers.           │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Anchor Protocol      │ Hunter in Indonesia withdraws to local bank     │
+  │                      │ account seamlessly.                             │
+  └──────────────────────┴──────────────────────────────────────────────────┘
+
+  Anchor Integration:
+  - Hunters in developing countries cash out to local bank accounts via
+    Anchors (e.g., Bitazza in Southeast Asia)
+  - Hiders deposit in XLM/USDC, hunters withdraw via Anchor
+  - Path Payments handle atomic currency conversion
+
+3. TARGET USERS ─────────────────────────────────────────────────────���─────────
+
+  A. The Hider
+     - Individuals: people creating surprise gifts, romantic proposals,
+       or just for fun
+     - Creators: content creators building physical-world engagement
+       with their followers
+     - Motivation: "I want to create an unforgettable moment"
+
+  B. The Hunter
+     - Students / young adults: looking for fun outdoor activities
+     - Gig economy: people wanting extra income while exercising
+     - Motivation: "I explore the city, earn money, and have fun"
+
+  C. The Brand
+     - Local SMEs: wanting engaging promotions, not just ads
+     - Event organizers: digital scavenger hunts at events
+     - Enterprise: foot traffic campaigns (visit location = claim reward)
+     - Motivation: "Ads are expensive and not engaging. We want foot traffic."
+
+4. TECHNICAL ARCHITECTURE ────────────────────────────────────────────────────
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                      FRONTEND (Next.js 16)                             │
+  │  Mapbox GL JS | Hunt UI (Create/Claim) | Wallet (Freighter)           │
+  │  Brand Dashboard | Verifier Panel | Leaderboard                        │
+  └─────────────────────┬───────────────────────────────────────────────────┘
+                        │
+  ┌─────────────────────▼───────────────────────────────────────────────────┐
+  │                     STELLAR NETWORK                                     │
+  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │
+  │  │  Soroban         │  │  Horizon API     │  │  Claimable       │      │
+  │  │  Contracts:      │  │  (balance, tx)   │  │  Balances        │      │
+  │  │  - hunt-factory  │  └──────────────────┘  │  (native escrow)  │      │
+  │  │  - hunt-instance │                       └──────────────────┘      │
+  │  │  - reputation    │                                                  │
+  │  │  - dispute       │  ┌──────────────────┐                            │
+  │  │  - quest-chain   │  │  Anchors         │                            │
+  │  └──────────────────┘  │  (on/off ramp)   │                            │
+  │                        └──────────────────┘                            │
+  └────────────────────────┬───────────────────────────────────────────────┘
+                           │
+  ┌────────────────────────▼───────────────────────────────────────────────┐
+  │                    OFF-CHAIN STORAGE                                    │
+  │  ┌──────────────────┐  ┌──────────────────┐                            │
+  │  │  Supabase (PG)   │  │  IPFS / Pinata   │                            │
+  │  │  - hunt metadata │  │  - reference     │                            │
+  │  │  - user profiles │  │    photos        │                            │
+  │  │  - realtime      │  │  - claim photos  │                            │
+  │  └──────────────────┘  │  - quest data    │                            │
+  │                        └──────────────────┘                            │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  Stack:
+  - Frontend:  Next.js 16 + React 19 + TypeScript 5 + Tailwind 4 + shadcn/ui
+  - Blockchain: Stellar (Soroban Contracts + Horizon API)
+  - Database:  Supabase PostgreSQL (17 tables, realtime subscriptions)
+  - Storage:   IPFS via Pinata
+  - Map:       Mapbox GL JS
+  - Wallet:    Freighter (Stellar Wallets Kit upcoming)
+
+  Smart Contracts (5 deployed on Testnet):
+  - hunt-factory:  Creates new hunt instances
+  - hunt-instance: Per-hunt lifecycle: deposit, claim, verification, release
+  - reputation:    XP, level, badges on-chain
+  - dispute:       Multi-sig commit-reveal voting
+  - quest-chain:   Multi-step quest with on-chain progress
+
+  Data Flow:
+  1. Hider creates hunt → upload photo to IPFS → call hunt-factory contract
+     → reward locked in Claimable Balance → metadata stored in Supabase
+  2. Hunter claims hunt → GPS verified → evidence photo → submit to contract
+     → 24h timer → hider approves / auto-release / dispute
+  3. Dispute → 3 verifiers commit-reveal vote → 2-of-3 decides
+
+5. COMPLEXITY EVALUATION ─────────────────────────────────────────────────────
+
+  Technical Challenges:
+
+  A. GPS Verification On-Chain
+     - GPS coordinates must be verified inside smart contract
+     - Haversine distance calculation in Soroban (integer math, no floating
+       point, no external libraries)
+     - Anti-spoofing: GPS + photo timestamp + multi-sig combination
+
+  B. Commit-Reveal Voting
+     - Verifiers vote without seeing each other's votes (commit phase)
+     - Hash-based: verifier commits hash(vote + salt)
+     - Reveal phase: all votes revealed, validated against hashes
+     - 2-of-3 threshold: requires quorum
+
+  C. Claimable Balance Integration
+     - Reward locked in Stellar Claimable Balance (native escrow)
+     - Auto-release: if hider doesn't respond in 24h, hunter auto-claims
+     - Dispute result determines fund flow
+
+  D. Cross-Border Economics
+     - Hunter in Indonesia: USDC reward → IDR via Anchor
+     - Path Payments: single atomic conversion transaction
+     - Anchor API: withdraw to bank account
+
+  E. Real-Time GPS + Blockchain
+     - Browser Geolocation API for real-time position
+     - On-chain verification via contract call after submission
+     - Anti-cheat: multi-factor location verification
+
+6. ROADMAP ───────────────────────────────────────────────────────────────────
+
+  ┌──────────┬──────────────────────────────────────────────────────────────┐
+  │ Level    │ Milestone                                                    │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ L1 ████  │ Landing, Map, Wallet, Profile (✅ Complete)                  │
+  │ L2 ████  │ Create Hunt, Claim Hunt (✅ Complete, contracts deployed)   │
+  │ L3 ████  │ Quest Chain, Verifier, Dispute, Settings (⬜ In Progress)   │
+  │ L4 ████  │ Brand Dashboard, Campaign Tools, Leaderboard                 │
+  │ L5 ████  │ 50 users, Community Feed, Streaks, Badges                   │
+  │ L6 ████  │ Mainnet, Security Audit, 10+ real users                    │
+  │ L7 ████  │ API/SDK, SCF Grant, Enterprise Partnership                 │
+  └──────────┴──────────────────────────────────────────────────────────────┘
+
+  MVP (Current — L1-L2):
+  ✅ Landing page + Connect Wallet (Freighter)
+  ✅ Map (read-only, Mapbox fallback)
+  ✅ Profile + Wallet + Balance (Horizon API)
+  ✅ Create Hunt wizard (6-step flow)
+  ✅ Claim Hunt flow (GPS check → photo → submit → pending)
+  ✅ 5 Smart Contracts deployed on Stellar Testnet
+  ✅ Soroban SDK helpers + IPFS Pinata service
+
+  User Acquisition (L3-L5):
+  ⬜ Quest Chain: multi-step hunt experience
+  ⬜ Verifier System: incentivized dispute resolution
+  ⬜ Brand Dashboard: campaign tools for SMEs
+  ⬜ Leaderboard: hunter/hider gamification
+  ⬜ Community Feed: real-time activity feed
+  ⬜ Target: 10-50 users on testnet
+
+  Mainnet Vision (L6-L7):
+  ⬜ Mainnet migration — change env testnet → mainnet
+  ⬜ Smart contract security audit
+  ⬜ Anchor integration: withdraw to bank accounts
+  ⬜ Bug bounty program
+  ⬜ API/SDK for third-party developers
+  ⬜ Target: 100+ real users
+
+================================================================================
+  JELAJAH — Hidden. Hunted. Claimed.
+  https://github.com/Faiz-abdurrachman/jelajah
+================================================================================

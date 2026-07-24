@@ -1,0 +1,413 @@
+================================================================================
+  JELAJAH — Idea Submission for Stellar Belt Challenge (Level 4)
+  "Hidden. Hunted. Claimed."
+================================================================================
+
+================================================================================
+  ENGLISH VERSION
+================================================================================
+
+------------------------------------------------------------------------------
+  1. PROBLEM STATEMENT
+------------------------------------------------------------------------------
+
+Real-world treasure hunts and location-based games exist today, but they all
+face a fundamental trust problem: participants must trust the organizer to
+actually pay the reward. There is no escrow, no dispute resolution, and no
+transparent verification system.
+
+Current problems:
+  • Hiders (organizers) must be trusted to pay rewards — no guarantee exists
+  • Hunters have no recourse if unfairly rejected
+  • GPS spoofing and fake claims are hard to prevent without cryptographic proof
+  • Dispute resolution is opaque and biased toward the platform
+  • No way to create verifiable, location-based claims on-chain
+
+JELAJAH solves this by creating a trustless, transparent ecosystem where
+rewards are locked in Stellar Claimable Balances, GPS verification happens
+on-chain, and disputes are resolved via multi-sig commit-reveal voting.
+
+------------------------------------------------------------------------------
+  2. WHY STELLAR?
+------------------------------------------------------------------------------
+
+Stellar is uniquely suited for this application:
+
+  a) Claimable Balances (Native Escrow)
+     Rewards are locked at hunt creation. The hider cannot withdraw them.
+     The hunter can claim them only when conditions are met (approval or
+     auto-release after 24h). No custom escrow contract needed — it's native.
+
+  b) Micropayment Viability
+     Stellar fees are ~Rp 1 (0.00001 XLM) per transaction. This makes it
+     viable for small hunts (starting from Rp 10,000) where Ethereum gas
+     would exceed the reward itself.
+
+  c) Path Payments
+     A hider deposits USDC, a hunter in Indonesia receives IDR — all in one
+     atomic transaction via Stellar Anchors.
+
+  d) Multi-sig Native
+     Dispute resolution uses Soroban contracts with 2-of-3 verifier voting.
+     Commit-reveal prevents vote collusion. Stellar's native multi-sig
+     infrastructure supports this elegantly.
+
+  e) Anchor Protocol
+     Winners can cash out to local bank accounts via Stellar Anchors,
+     bridging crypto to real-world fiat.
+
+  f) Soroban Smart Contracts
+     Custom logic for hunt lifecycle, reputation, quest chains, and dispute
+     resolution — all on Stellar's WASM-based Soroban platform.
+
+------------------------------------------------------------------------------
+  3. TARGET USERS
+------------------------------------------------------------------------------
+
+  a) Hiders (Creators)
+     • Individuals: Create romantic, social, or fun treasure hunts
+     • Content creators: Engage followers with location-based challenges
+     • Event organizers: Scavenger hunts for weddings, team buildings
+     • Philanthropists: Hide rewards for others to find
+
+  b) Hunters (Seekers)
+     • Adventurers: Explore their city while earning rewards
+     • Gamers: Compete on leaderboards, earn badges
+     • Casual users: Looking for fun outdoor activities
+     • Income seekers: Earn crypto by finding hunts
+
+  c) Brands (Enterprise)
+     • Local businesses: Drive foot traffic with in-store hunts
+     • Marketing agencies: Location-based advertising campaigns
+     • Tourism boards: Guide visitors to attractions
+
+  TAM (Total Addressable Market):
+     • Treasure hunt / escape room market: $2B+ globally
+     • Location-based gaming: $10B+ globally
+     • Indonesia's tourism + gaming market: growing rapidly
+
+------------------------------------------------------------------------------
+  4. TECHNICAL ARCHITECTURE
+------------------------------------------------------------------------------
+
+  FRONTEND (Next.js 16 + React 19 + TypeScript 5)
+  ─────────────────────────────────────────────────
+  • Mapbox GL JS for interactive map with hunt markers
+  • shadcn/ui + Tailwind CSS 4 for responsive UI
+  • Freighter Wallet integration for Stellar auth
+  • IPFS (Pinata) for photo evidence storage
+
+  SMART CONTRACTS (Rust + Soroban SDK 27)
+  ─────────────────────────────────────────────────
+  • hunt-factory: Creates hunt instances, emits events
+  • hunt-instance: Full lifecycle (deposit → claim → verify → release)
+  • reputation: XP, level, and badge management
+  • dispute: Multi-sig commit-reveal voting with appeal
+  • quest-chain: Multi-step sequential quests
+
+  DATA FLOW
+  ─────────────────────────────────────────────────
+  Create Hunt:
+    Hider inputs clue → Upload photo to IPFS → Hash clue + CID →
+    Call hunt-factory.create_hunt() → Reward locked in Claimable Balance →
+    Metadata stored in Supabase → Marker appears on map
+
+  Claim Hunt:
+    Hunter navigates to GPS location → GPS verified on-chain →
+    Takes photo → Uploads to IPFS → Submits claim →
+    24h timer starts → Hider approves OR auto-release
+
+  Dispute:
+    Hider rejects claim → 3 verifiers selected →
+    Commit votes (hash) → Reveal votes →
+    2-of-3 majority decides → Reward released or returned
+
+  OFF-CHAIN (Supabase PostgreSQL)
+  ─────────────────────────────────────────────────
+  • Hunt metadata, user profiles, notifications
+  • Realtime subscriptions for live map updates
+  • 17 tables across all levels (L1-L7)
+
+------------------------------------------------------------------------------
+  5. COMPLEXITY EVALUATION
+------------------------------------------------------------------------------
+
+  HIGH COMPLEXITY AREAS:
+
+  a) GPS Verification On-Chain
+     • Converting GPS coordinates (lat/lng × 10^7) to Soroban i64/i128
+     • Haversine distance calculation in no_std Rust environment
+     • Anti-spoofing: GPS metadata from browser + photo timestamp +
+       multi-sig verification
+
+  b) Commit-Reveal Voting
+     • Verifiers commit a hash of their vote + salt
+     • After all commit, they reveal (vote, salt)
+     • On-chain verification that hash(verifier, vote, salt) matches
+     • Prevents vote copying and collusion
+
+  c) Claimable Balance Integration
+     • Native Stellar Claimable Balances as escrow
+     • Must coordinate Soroban contract state with balance claims
+     • Auto-release logic: 24h timer triggers contract-level release
+
+  d) Quest Chain Sequencing
+     • Multi-step quests where each step unlocks the next
+     • GPS verification per step, photo evidence per step
+     • Final step triggers reward claim
+
+  e) Cross-Layer Architecture
+     • On-chain: Soroban contracts for trustless logic
+     • Off-chain: Supabase for metadata, IPFS for media
+     • Indexer needed to sync contract events → database
+     • Realtime sync between blockchain state and UI
+
+------------------------------------------------------------------------------
+  6. ROADMAP
+------------------------------------------------------------------------------
+
+  MVP (Current — L1/L2 ✅)
+  ─────────────────────────────
+  • Landing page + wallet connection (Freighter)
+  • Map view with hunt markers (placeholder)
+  • User profile + wallet balance
+  • Create Hunt wizard (6-step form)
+  • Claim Hunt flow (GPS + photo + submit)
+  • 5 Soroban contracts deployed to testnet
+  • Soroban SDK helpers + IPFS Pinata service
+
+  Phase 2 — L3 (In Progress)
+  ─────────────────────────────
+  • Quest Chain UI (multi-step, GPS per step, final claim)
+  • Verifier Dashboard (dispute list, vote, stake management)
+  • Dispute Detail + Appeal flow (commit-reveal)
+  • Settings page (network, language, currency)
+
+  Phase 3 — L4-L5 (Next)
+  ─────────────────────────────
+  • Brand Dashboard (register, campaign tools, analytics)
+  • Leaderboard (hunter + hider rankings)
+  • Community Feed (activity feed, notifications)
+  • Streak system + badges
+  • 10 real users on testnet
+
+  Phase 4 — L6 (Mainnet)
+  ─────────────────────────────
+  • Security audit
+  • Mainnet migration
+  • 10+ mainnet users
+  • Bug bounty program
+
+  Phase 5 — L7 (Scale)
+  ─────────────────────────────
+  • API/SDK for developers
+  • Enterprise brand partnerships
+  • SCF Grant application
+  • 100+ mainnet users
+
+==============================================================================
+  END OF ENGLISH VERSION
+==============================================================================
+
+
+
+================================================================================
+  VERSI BAHASA INDONESIA
+================================================================================
+
+------------------------------------------------------------------------------
+  1. PERNYATAAN MASALAH
+------------------------------------------------------------------------------
+
+Permainan berburu harta karun di dunia nyata sudah ada, tapi semuanya punya
+masalah kepercayaan fundamental: peserta harus percaya bahwa penyelenggara
+benar-benar akan membayar hadiahnya. Tidak ada escrow, tidak ada resolusi
+sengketa, dan tidak ada sistem verifikasi yang transparan.
+
+Masalah saat ini:
+  • Hider (penyelenggara) harus dipercaya untuk membayar — tidak ada jaminan
+  • Hunter tidak punya jalur banding jika klaim ditolak secara tidak adil
+  • GPS spoofing dan klaim palsu sulit dicegah tanpa bukti kriptografis
+  • Resolusi sengketa tidak transparan dan bias ke platform
+  • Tidak ada cara untuk membuat klaim berbasis lokasi yang terverifikasi on-chain
+
+JELAJAH menyelesaikan ini dengan ekosistem trustless dan transparan di mana
+hadiah dikunci di Stellar Claimable Balances, verifikasi GPS terjadi on-chain,
+dan sengketa diselesaikan melalui pemungutan suara multi-sig commit-reveal.
+
+------------------------------------------------------------------------------
+  2. MENGAPA STELLAR?
+------------------------------------------------------------------------------
+
+Stellar sangat cocok untuk aplikasi ini:
+
+  a) Claimable Balances (Escrow Native)
+     Hadiah dikunci saat pembuatan hunt. Hider tidak bisa menariknya.
+     Hunter bisa klaim hanya jika kondisi terpenuhi (approval atau auto-release
+     setelah 24 jam). Tidak perlu kontrak escrow khusus — ini native.
+
+  b) Mikropayment yang Viable
+     Biaya Stellar ~Rp 1 (0,00001 XLM) per transaksi. Ini membuatnya viable
+     untuk hunt kecil (mulai Rp 10.000) di mana gas Ethereum bisa melebihi
+     nilai hadiah itu sendiri.
+
+  c) Path Payments
+     Hider deposit USDC, hunter di Indonesia terima IDR — semua dalam satu
+     transaksi atomik melalui Stellar Anchors.
+
+  d) Multi-sig Native
+     Resolusi sengketa menggunakan kontrak Soroban dengan voting 2-of-3
+     verifikator. Commit-reveal mencegah kolusi voting. Infrastruktur multi-sig
+     native Stellar mendukung ini dengan elegan.
+
+  e) Anchor Protocol
+     Pemenang bisa cairkan ke rekening bank lokal melalui Stellar Anchors,
+     menjembatani crypto ke fiat dunia nyata.
+
+  f) Soroban Smart Contracts
+     Logika khusus untuk siklus hidup hunt, reputasi, quest chain, dan resolusi
+     sengketa — semuanya di platform WASM Soroban milik Stellar.
+
+------------------------------------------------------------------------------
+  3. PENGGUNA SASARAN
+------------------------------------------------------------------------------
+
+  a) Hider (Pembuat)
+     • Individu: Bikin hunt romantis, sosial, atau seru-seruan
+     • Content creator: Libatkan follower dengan tantangan berbasis lokasi
+     • Event organizer: Hunt untuk wedding, team building
+     • Filantropis: Sembunyikan hadiah untuk orang lain
+
+  b) Hunter (Pencari)
+     • Petualang: Jelajahi kota sambil dapat hadiah
+     • Gamer: Bersaing di leaderboard, dapatkan badge
+     • Pengguna kasual: Cari aktivitas outdoor yang seru
+     • Pencari penghasilan: Dapatkan crypto dengan berburu
+
+  c) Brand (Perusahaan)
+     • Bisnis lokal: Tarik pengunjung dengan hunt di dalam toko
+     • Agensi marketing: Kampanye iklan berbasis lokasi
+     • Dinas pariwisata: Pandu wisatawan ke tempat wisata
+
+------------------------------------------------------------------------------
+  4. ARSITEKTUR TEKNIS
+------------------------------------------------------------------------------
+
+  FRONTEND (Next.js 16 + React 19 + TypeScript 5)
+  ─────────────────────────────────────────────────
+  • Mapbox GL JS untuk peta interaktif dengan marker hunt
+  • shadcn/ui + Tailwind CSS 4 untuk UI responsif
+  • Integrasi Freighter Wallet untuk autentikasi Stellar
+  • IPFS (Pinata) untuk penyimpanan foto bukti
+
+  SMART CONTRACTS (Rust + Soroban SDK 27)
+  ─────────────────────────────────────────────────
+  • hunt-factory: Membuat instance hunt, memancarkan event
+  • hunt-instance: Siklus hidup penuh (deposit → klaim → verifikasi → rilis)
+  • reputation: Manajemen XP, level, dan badge
+  • dispute: Voting multi-sig commit-reveal dengan banding
+  • quest-chain: Quest multi-langkah berurutan
+
+  ALUR DATA
+  ─────────────────────────────────────────────────
+  Buat Hunt:
+    Hider input clue → Upload foto ke IPFS → Hash clue + CID →
+    Panggil hunt-factory.create_hunt() → Hadiah dikunci di Claimable Balance →
+    Metadata disimpan di Supabase → Marker muncul di peta
+
+  Klaim Hunt:
+    Hunter navigasi ke lokasi GPS → GPS diverifikasi on-chain →
+    Ambil foto → Upload ke IPFS → Submit klaim →
+    Timer 24 jam mulai → Hider approve ATAU auto-release
+
+  Sengketa:
+    Hider tolak klaim → 3 verifikator dipilih →
+    Commit vote (hash) → Reveal vote →
+    Mayoritas 2-of-3 memutuskan → Hadiah dirilis atau dikembalikan
+
+  OFF-CHAIN (Supabase PostgreSQL)
+  ─────────────────────────────────────────────────
+  • Metadata hunt, profil user, notifikasi
+  • Langganan realtime untuk update peta langsung
+  • 17 tabel untuk semua level (L1-L7)
+
+------------------------------------------------------------------------------
+  5. EVALUASI KOMPLEKSITAS
+------------------------------------------------------------------------------
+
+  AREA KOMPLEKSITAS TINGGI:
+
+  a) Verifikasi GPS On-Chain
+     • Konversi koordinat GPS (lat/lng × 10^7) ke i64/i128 Soroban
+     • Perhitungan jarak Haversine di lingkungan no_std Rust
+     • Anti-spoofing: metadata GPS browser + timestamp foto +
+       verifikasi multi-sig
+
+  b) Voting Commit-Reveal
+     • Verifikator commit hash dari vote + salt mereka
+     • Setelah semua commit, mereka reveal (vote, salt)
+     • Verifikasi on-chain bahwa hash(verifikator, vote, salt) cocok
+     • Mencegah copy voting dan kolusi
+
+  c) Integrasi Claimable Balance
+     • Claimable Balance native Stellar sebagai escrow
+     • Koordinasi state kontrak Soroban dengan klaim balance
+     • Logika auto-release: timer 24 jam memicu rilis di level kontrak
+
+  d) Urutan Quest Chain
+     • Quest multi-langkah di mana setiap langkah membuka langkah berikutnya
+     • Verifikasi GPS per langkah, foto bukti per langkah
+     • Langkah terakhir memicu klaim hadiah
+
+  e) Arsitektur Lintas-Layer
+     • On-chain: Kontrak Soroban untuk logika trustless
+     • Off-chain: Supabase untuk metadata, IPFS untuk media
+     • Indexer diperlukan untuk sinkronisasi event kontrak → database
+     • Sinkronisasi realtime antara state blockchain dan UI
+
+------------------------------------------------------------------------------
+  6. ROADMAP
+------------------------------------------------------------------------------
+
+  MVP (Sekarang — L1/L2 ✅)
+  ─────────────────────────────
+  • Landing page + koneksi wallet (Freighter)
+  • Tampilan peta dengan marker hunt (placeholder)
+  • Profil user + saldo wallet
+  • Wizard Buat Hunt (6 langkah)
+  • Alur Klaim Hunt (GPS + foto + submit)
+  • 5 kontrak Soroban terdeploy ke testnet
+  • Helper Soroban SDK + layanan IPFS Pinata
+
+  Fase 2 — L3 (Sedang Dikerjakan)
+  ─────────────────────────────
+  • UI Quest Chain (multi-langkah, GPS per langkah, klaim final)
+  • Dashboard Verifikator (daftar sengketa, vote, manajemen stake)
+  • Detail Sengketa + Alur Banding (commit-reveal)
+  • Halaman Pengaturan (network, bahasa, mata uang)
+
+  Fase 3 — L4-L5 (Selanjutnya)
+  ─────────────────────────────
+  • Dashboard Brand (daftar, alat kampanye, analitik)
+  • Papan Peringkat (peringkat hunter + hider)
+  • Feed Komunitas (aktivitas, notifikasi)
+  • Sistem Streak + Badge
+  • 10 pengguna nyata di testnet
+
+  Fase 4 — L6 (Mainnet)
+  ─────────────────────────────
+  • Audit keamanan
+  • Migrasi ke mainnet
+  • 10+ pengguna mainnet
+  • Program bug bounty
+
+  Fase 5 — L7 (Skala)
+  ─────────────────────────────
+  • API/SDK untuk developer
+  • Kemitraan brand enterprise
+  • Aplikasi SCF Grant
+  • 100+ pengguna mainnet
+
+==============================================================================
+  AKHIR VERSI BAHASA INDONESIA
+==============================================================================

@@ -1,0 +1,209 @@
+================================================================================
+  IDEA SUBMISSION — JELAJAH
+  Versi Bahasa Indonesia
+================================================================================
+  Platform Treasure Hunt Dunia Nyata di Stellar Blockchain
+  "Hidden. Hunted. Claimed."
+================================================================================
+
+1. PROBLEM STATEMENT ───────────────────────────────────────────────────────────
+
+  Judul: Menjembatani Dunia Fisik dengan Blockchain melalui Treasure Hunt
+         Dunia Nyata
+
+  Masalah:
+  Dunia fisik dan blockchain masih terpisah. Interaksi pengguna dengan
+  blockchain saat ini terbatas pada layar — trade, swap, NFT, DeFi — tapi
+  tidak ada yang menghubungkan lokasi fisik dengan aset digital.
+
+  Di sisi lain, pengalaman "treasure hunt" atau "geocaching" sudah ada
+  secara offline, tapi:
+  ❌ Tidak ada insentif ekonomi — reward-nya hadiah fisik, bukan aset digital
+  ❌ Trust-nya terpusat — bergantung pada penyelenggara
+  ❌ Tidak bisa diskalakan — butuh pihak ketiga untuk mengelola
+  ❌ Tidak transparan — tidak ada bukti on-chain siapa yang klaim apa
+
+  JELAJAH memecahkan ini dengan menciptakan pasar treasure hunt yang:
+  ✅ Trustless — reward dikunci di Claimable Balance Stellar
+  ✅ Terdesentralisasi — siapa pun bisa bikin hunt
+  ✅ Transparan — semua event tercatat di blockchain
+  ✅ Ekonomi nyata — hunter dapet XLM/USDC, bukan hadiah fisik
+
+2. WHY STELLAR? ───────────────────────────────────────────────────────────────
+
+  Stellar adalah satu-satunya blockchain yang secara native mendukung
+  use case JELAJAH tanpa perlu contract custom yang kompleks:
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Fitur Stellar        │ Gunanya buat JELAJAH                            │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Claimable Balances   │ Escrow native — duit ditahan sampai kondisi     │
+  │                      │ terpenuhi. Gak perlu deploy contract escrow.    │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Path Payments        │ Bounty poster bayar USDC, hunter di Indo terima │
+  │                      │ IDR via Anchor — 1 transaksi atomik.            │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Fee ~Rp 1/transaksi  │ Viable buat hunt kecil Rp 10.000.              │
+  │                      │ Di Ethereum gas > reward.                       │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Multi-sig native     │ Dispute resolution: 2-of-3 verifikator.         │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Anchor Protocol      │ Hunter di Indonesia tarik dana ke rekening      │
+  │                      │ bank lokal tanpa ribet.                         │
+  └──────────────────────┴──────────────────────────────────────────────────┘
+
+  Anchor Integration:
+  - Hunter di negara berkembang bisa cairin reward ke rekening bank lokal
+    via Anchor (contoh: Bitazza di Asia Tenggara)
+  - Hider deposit pakai XLM/USDC, hunter withdraw via Anchor
+  - Path Payments handle konversi mata uang atomik
+
+3. TARGET USERS ───────────────────────────────────────────────────────────────
+
+  A. The Hider (Pembuat Hunt)
+     - Individu: orang yang mau seru-seruan, bikin kado kejutan,
+       proposal romantis, atau iseng
+     - Creator: content creator yang mau bikin interaksi dengan followers
+       di lokasi fisik
+     - Motivasi: "Gue mau bikin momen yang gak terlupakan"
+
+  B. The Hunter (Pemburu)
+     - Mahasiswa / anak muda: cari aktivitas seru sambil jalan-jalan
+     - Gigs economy: orang yang mau dapet duit tambahan sambil olahraga
+     - Motivasi: "Gue jalan-jalan, dapet duit, seru lagi"
+
+  C. The Brand
+     - UKM lokal: mau promosi dengan engaging, bukan sekedar iklan
+     - Event organizer: bikin scavenger hunt digital di acara
+     - Enterprise: foot traffic campaign (dateng ke lokasi fisik = klaim reward)
+     - Motivasi: "Iklan mahal, gak engaging. Pengen orang dateng fisik."
+
+4. TECHNICAL ARCHITECTURE ────────────────────────────────────────────────────
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                      FRONTEND (Next.js 16)                             │
+  │  Mapbox GL JS | Hunt UI (Create/Claim) | Wallet (Freighter)           │
+  │  Brand Dashboard | Verifier Panel | Leaderboard                        │
+  └─────────────────────┬───────────────────────────────────────────────────┘
+                        │
+  ┌─────────────────────▼───────────────────────────────────────────────────┐
+  │                     STELLAR NETWORK                                     │
+  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │
+  │  │  Soroban         │  │  Horizon API     │  │  Claimable       │      │
+  │  │  Contracts:      │  │  (balance, tx)   │  │  Balances        │      │
+  │  │  - hunt-factory  │  └──────────────────┘  │  (escrow native)  │      │
+  │  │  - hunt-instance │                       └──────────────────┘      │
+  │  │  - reputation    │                                                  │
+  │  │  - dispute       │  ┌──────────────────┐                            │
+  │  │  - quest-chain   │  │  Anchors         │                            │
+  │  └──────────────────┘  │  (on/off ramp)   │                            │
+  │                        └──────────────────┘                            │
+  └────────────────────────┬───────────────────────────────────────────────┘
+                           │
+  ┌────────────────────────▼───────────────────────────────────────────────┐
+  │                    OFF-CHAIN STORAGE                                    │
+  │  ┌──────────────────┐  ┌──────────────────┐                            │
+  │  │  Supabase (PG)   │  │  IPFS / Pinata   │                            │
+  │  │  - hunt metadata │  │  - foto referensi │                            │
+  │  │  - user profiles │  │  - foto bukti     │                            │
+  │  │  - realtime      │  │  - quest data     │                            │
+  │  └──────────────────┘  └──────────────────┘                            │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  Stack:
+  - Frontend:  Next.js 16 + React 19 + TypeScript 5 + Tailwind 4 + shadcn/ui
+  - Blockchain: Stellar (Soroban Contracts + Horizon API)
+  - Database:  Supabase PostgreSQL (17 tables, realtime subscriptions)
+  - Storage:   IPFS via Pinata
+  - Map:       Mapbox GL JS
+  - Wallet:    Freighter (Stellar Wallets Kit menyusul)
+
+  Smart Contracts (5 deployed on Testnet):
+  - hunt-factory:  Membuat instance hunt baru
+  - hunt-instance: Lifecycle per hunt: deposit, claim, verifikasi, release
+  - reputation:    XP, level, badges on-chain
+  - dispute:       Multi-sig commit-reveal voting
+  - quest-chain:   Multi-step quest dengan progres on-chain
+
+  Data Flow:
+  1. Hider create hunt → upload foto ke IPFS → call hunt-factory contract
+     → reward dikunci di Claimable Balance → metadata di Supabase
+  2. Hunter claim hunt → GPS verified → foto bukti → submit ke contract
+     → timer 24 jam → hider approve / auto release / dispute
+  3. Dispute → 3 verifikator commit-reveal vote → 2-of-3 decide
+
+5. COMPLEXITY EVALUATION ─────────────────────────────────────────────────────
+
+  Tantangan Teknis:
+
+  A. GPS Verification On-Chain
+     - GPS coordinate harus diverifikasi di smart contract
+     - Haversine distance calculation di Soroban contract (integer math,
+       tanpa floating point, tanpa library eksternal)
+     - Anti-spoofing: kombinasi GPS + foto timestamp + multi-sig
+
+  B. Commit-Reveal Voting
+     - Verifikator vote tanpa bisa saling liat (commit phase)
+     - Hash-based: verifikator commit hash(vote + salt)
+     - Reveal phase: semua buka vote, divalidasi hash-nya
+     - 2-of-3 threshold: butuh quorum
+
+  C. Claimable Balance Integration
+     - Reward dikunci di Stellar Claimable Balance (native escrow)
+     - Auto-release: jika hider tidak approve dalam 24 jam, hunter
+       bisa claim otomatis
+     - Dispute: verifikator voting mutusin duit cair atau balik
+
+  D. Cross-Chain Economics
+     - Hunter di Indonesia: reward USDC → IDR via Anchor
+     - Path Payments: 1 transaksi atomik untuk konversi
+     - Anchor API: withdraw ke rekening bank
+
+  E. Real-Time Location + Blockchain
+     - Hunter GPS position real-time di frontend (browser Geolocation API)
+     - Verifikasi on-chain via contract call setelah submit
+     - Anti-cheat: GPS spoofing detection via kombinasi metode
+
+6. ROADMAP ───────────────────────────────────────────────────────────────────
+
+  ┌──────────┬──────────────────────────────────────────────────────────────┐
+  │ Level    │ Milestone                                                    │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ L1 ████  │ Landing, Map, Wallet, Profile (✅ Selesai)                   │
+  │ L2 ████  │ Create Hunt, Claim Hunt (✅ Selesai, contracts deployed)    │
+  │ L3 ████  │ Quest Chain, Verifier, Dispute, Settings (⬜ Dalam Progress)│
+  │ L4 ████  │ Brand Dashboard, Campaign Tools, Leaderboard                 │
+  │ L5 ████  │ 50 users, Community Feed, Streaks, Badges                   │
+  │ L6 ████  │ Mainnet, Security Audit, 10+ real users                    │
+  │ L7 ████  │ API/SDK, SCF Grant, Enterprise Partnership                 │
+  └──────────┴──────────────────────────────────────────────────────────────┘
+
+  MVP (Saat ini — L1-L2):
+  ✅ Landing page + Connect Wallet (Freighter)
+  ✅ Map (read-only, Mapbox fallback)
+  ✅ Profile + Wallet + Balance (Horizon API)
+  ✅ Create Hunt wizard (6-step: type → clue → GPS → reward → deadline → sign)
+  ✅ Claim Hunt flow (GPS check → foto → submit → pending/approved/rejected)
+  ✅ 5 Smart Contracts deployed on Stellar Testnet
+  ✅ Soroban SDK helpers + IPFS Pinata service
+
+  User Acquisition (L3-L5):
+  ⬜ Quest Chain: multi-step hunt experience
+  ⬜ Verifier System: dispute resolution dengan insentif
+  ⬜ Brand Dashboard: campaign tools untuk UKM
+  ⬜ Leaderboard: gamifikasi hunter/hider
+  ⬜ Community Feed: aktivitas real-time
+  ⬜ Target: 10-50 users di testnet
+
+  Mainnet Vision (L6-L7):
+  ⬜ Mainnet migration — ganti env testnet → mainnet
+  ⬜ Security audit smart contract
+  ⬜ Anchor integration: withdraw ke rekening bank
+  ⬜ Bug bounty program
+  ⬜ API/SDK untuk developer third-party
+  ⬜ Target: 100+ real users
+
+================================================================================
+  JELAJAH — Hidden. Hunted. Claimed.
+  https://github.com/Faiz-abdurrachman/jelajah
+================================================================================
