@@ -14,15 +14,35 @@
 
 ## 📸 Screenshots
 
-> Screenshots diambil menggunakan Freighter wallet di Stellar Testnet.
+> Screenshots diambil di Stellar Testnet.
 
-| Wallet Connected | Balance Displayed |
+| Landing Page | Map (OpenStreetMap) |
 |---|---|
-| ![Wallet Connected](./public/screenshots/wallet-connected.png) | ![Balance](./public/screenshots/balance.png) |
+| ![Landing](./public/screenshots/landing-wallet.png) | ![Map](./public/screenshots/map-page.png) |
 
-| Successful Transaction | Transaction Result |
+| Hunt Create Wizard | Leaderboard |
 |---|---|
-| ![Transaction](./public/screenshots/transaction.png) | ![Result](./public/screenshots/transaction-result.png) |
+| ![Hunt Create](./public/screenshots/hunt-create.png) | ![Leaderboard](./public/screenshots/leaderboard.png) |
+
+| Community Feed | Profile |
+|---|---|
+| ![Community](./public/screenshots/community.png) | ![Profile](./public/screenshots/profile.png) |
+
+| Wallet Connect Prompt | How It Works |
+|---|---|
+| ![Wallet](./public/screenshots/wallet.png) | ![How It Works](./public/screenshots/landing-how-it-works.png) |
+
+---
+
+## 🔗 Contract Verification
+
+**Transaction Hash** (reputation contract — `add_xp` call on Testnet):
+
+```
+0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2
+```
+
+🔗 [View on Stellar Expert](https://stellar.expert/explorer/testnet/tx/0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2)
 
 ---
 
