@@ -29,7 +29,7 @@ export const supabase = createClient(
 
 // ─── Helper Queries ───────────────────────────────────
 
-import type { User, Hunt, Notification } from "@/types";
+import type { User, Hunt, Notification, Verifier, Brand } from "@/types";
 
 /**
  * Get or create user by Stellar public key.
@@ -136,6 +136,104 @@ export function subscribeToNotifications(
       (payload) => {
         callback(payload.new as Notification);
       }
+    )
+    .subscribe();
+}
+
+// ─── L3 Query Helpers ─────────────────────────────────
+
+/**
+ * Get all quest-type hunts (multi-step).
+ */
+export async function getAllQuests() {
+  const { data } = await supabase
+    .from("hunts")
+    .select("*, hider:users!hunts_hider_pubkey_fkey(*)")
+    .eq("hunt_type", "quest")
+    .order("created_at", { ascending: false });
+
+  return data ?? [];
+}
+
+/**
+ * Get disputes assigned to a verifier or all disputes.
+ */
+export async function getDisputes(verifierPubkey?: string) {
+  let query = supabase
+    .from("disputes")
+    .select("*, claim:claims(*, hunt:hunts(*))")
+    .order("created_at", { ascending: false });
+
+  if (verifierPubkey) {
+    query = query.contains("verifiers", [verifierPubkey]);
+  }
+
+  const { data } = await query;
+  return data ?? [];
+}
+
+/**
+ * Get verifier stats for dashboard.
+ */
+export async function getVerifierStats(publicKey: string) {
+  const { data } = await supabase
+    .from("verifiers")
+    .select("*")
+    .eq("public_key", publicKey)
+    .single();
+
+  return data as Verifier | null;
+}
+
+/**
+ * Get leaderboard data — top hunters by reputation score.
+ */
+export async function getLeaderboard(limit = 50) {
+  const { data } = await supabase
+    .from("users")
+    .select("*")
+    .order("reputation_score", { ascending: false })
+    .limit(limit);
+
+  return data ?? [];
+}
+
+/**
+ * Get community activities feed.
+ */
+export async function getCommunityActivities(limit = 30) {
+  const { data } = await supabase
+    .from("community_activities")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return data ?? [];
+}
+
+/**
+ * Check if a user is registered as a brand.
+ */
+export async function getBrandProfile(publicKey: string) {
+  const { data } = await supabase
+    .from("brands")
+    .select("*")
+    .eq("public_key", publicKey)
+    .single();
+
+  return data as Brand | null;
+}
+
+/**
+ * Subscribe to community activities in realtime.
+ */
+export function subscribeToCommunityActivities(callback: (activity: Record<string, unknown>) => void) {
+  return supabase
+    .channel("community-activities")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "community_activities" },
+      (payload) => { callback(payload.new as Record<string, unknown>); }
     )
     .subscribe();
 }

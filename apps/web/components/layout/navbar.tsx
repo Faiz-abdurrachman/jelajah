@@ -4,15 +4,21 @@ import Link from "next/link";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Compass, Map, User, WalletIcon, Menu } from "lucide-react";
+import { Compass, Map, User, WalletIcon, Menu, Swords, ShieldCheck, Settings, Trophy, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
+import { isFeatureUnlocked } from "@/config/levels";
 
 const NAV_ITEMS = [
   { href: "/map", label: "Map", icon: Map, level: 1 },
   { href: "/profile", label: "Profile", icon: User, level: 1 },
   { href: "/wallet", label: "Wallet", icon: WalletIcon, level: 1 },
+  { href: "/quest/1", label: "Quest", icon: Swords, level: 3, featureKey: "quest-chain" as const },
+  { href: "/verify", label: "Verify", icon: ShieldCheck, level: 3, featureKey: "verifier-dashboard" as const },
+  { href: "/settings", label: "Settings", icon: Settings, level: 3, featureKey: "settings" as const },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy, level: 4, featureKey: "leaderboard" as const },
+  { href: "/community", label: "Community", icon: Users, level: 5, featureKey: "community-feed" as const },
 ] as const;
 
 export function Navbar() {
@@ -33,7 +39,7 @@ export function Navbar() {
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-6">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => !("featureKey" in item) || isFeatureUnlocked(item.featureKey)).map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -101,7 +107,7 @@ export function Navbar() {
                 <Separator />
 
                 {/* Nav Items */}
-                {NAV_ITEMS.map((item) => (
+                {NAV_ITEMS.filter((item) => !("featureKey" in item) || isFeatureUnlocked(item.featureKey)).map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}

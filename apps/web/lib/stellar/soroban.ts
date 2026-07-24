@@ -69,6 +69,10 @@ export function toScBytesN32(hex: string): xdr.ScVal {
   return nativeToScVal(buf);
 }
 
+export function toScBool(val: boolean): xdr.ScVal {
+  return nativeToScVal(val);
+}
+
 export function fromScVal(val: xdr.ScVal): unknown { return scValToNative(val); }
 
 export async function createHuntTx(
@@ -99,5 +103,77 @@ export async function submitClaimTx(
     toScI64(BigInt(Math.round(lng * 10_000_000))),
   ];
   try { await simulateTx(pubKey, c, "submit_claim", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+// ─── L3 Quest Chain ───────────────────────────────────
+
+export async function completeStepTx(
+  pubKey: string, questIdHex: string, step: number, photoCidHex: string
+): Promise<TxResult> {
+  const c = getQuestChainContract();
+  if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
+  const args: xdr.ScVal[] = [
+    toScBytesN32(questIdHex), toScAddress(pubKey),
+    toScU32(step), toScBytesN32(photoCidHex),
+  ];
+  try { await simulateTx(pubKey, c, "complete_step", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+export async function claimQuestTx(
+  pubKey: string, questIdHex: string
+): Promise<TxResult> {
+  const c = getQuestChainContract();
+  if (!c) return { hash: "", success: false, error: "Quest Chain not deployed" };
+  const args: xdr.ScVal[] = [toScBytesN32(questIdHex), toScAddress(pubKey)];
+  try { await simulateTx(pubKey, c, "claim_quest", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+// ─── L3 Dispute ───────────────────────────────────────
+
+export async function commitVoteTx(
+  pubKey: string, disputeIdHex: string, voteHashHex: string
+): Promise<TxResult> {
+  const c = getDisputeContract();
+  if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
+  const args: xdr.ScVal[] = [
+    toScBytesN32(disputeIdHex), toScAddress(pubKey), toScBytesN32(voteHashHex),
+  ];
+  try { await simulateTx(pubKey, c, "commit_vote", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+export async function revealVoteTx(
+  pubKey: string, disputeIdHex: string, vote: boolean, saltHex: string
+): Promise<TxResult> {
+  const c = getDisputeContract();
+  if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
+  const args: xdr.ScVal[] = [
+    toScBytesN32(disputeIdHex), toScAddress(pubKey),
+    toScBool(vote), toScBytesN32(saltHex),
+  ];
+  try { await simulateTx(pubKey, c, "reveal_vote", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+export async function resolveDisputeTx(
+  pubKey: string, disputeIdHex: string
+): Promise<TxResult> {
+  const c = getDisputeContract();
+  if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
+  const args: xdr.ScVal[] = [toScBytesN32(disputeIdHex)];
+  try { await simulateTx(pubKey, c, "resolve", args); return { hash: "", success: true, result: "Sim OK" }; }
+  catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
+}
+
+export async function appealTx(
+  pubKey: string, disputeIdHex: string
+): Promise<TxResult> {
+  const c = getDisputeContract();
+  if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
+  const args: xdr.ScVal[] = [toScBytesN32(disputeIdHex), toScAddress(pubKey)];
+  try { await simulateTx(pubKey, c, "appeal", args); return { hash: "", success: true, result: "Sim OK" }; }
   catch (e) { return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed" }; }
 }
