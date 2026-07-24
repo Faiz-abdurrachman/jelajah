@@ -48,8 +48,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkExistingConnection = async () => {
       try {
-        const connected = await isConnected();
-        if (connected) {
+        const status = await isConnected();
+        if (status.isConnected) {
           const { address } = await getAddress();
           if (address) {
             setPublicKey(address);
@@ -67,8 +67,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const connected = await isConnected();
-      if (!connected) {
+      const status = await isConnected();
+      if (!status.isConnected) {
         await requestAccess();
       }
 
