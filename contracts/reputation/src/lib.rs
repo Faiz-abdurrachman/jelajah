@@ -92,7 +92,7 @@ impl Reputation {
     }
 }
 
-#[cfg(all(test, feature = "testutils"))]
+#[cfg(test)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;

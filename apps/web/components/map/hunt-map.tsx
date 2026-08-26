@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Navigation } from "lucide-react";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { MAP_CONFIG } from "@/config/constants";
 import type { Hunt, HuntMarker, MapCoordinates } from "@/types";
+import { getActiveHunts } from "@/lib/supabase/client";
+import { normalizeHunt } from "@/lib/supabase/normalize";
 
 const LeafletFallback = dynamic(
   () => import("./leaflet-fallback").then((m) => ({ default: m.LeafletFallback })),
@@ -48,7 +50,7 @@ interface MBGL {
 }
 
 export function HuntMap({
-  hunts = [],
+  hunts,
   onHuntClick,
   centerOn,
   className = "",
@@ -63,6 +65,41 @@ export function HuntMap({
   );
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [loadedHunts, setLoadedHunts] = useState<HuntMarker[]>([]);
+  const visibleHunts = hunts ?? loadedHunts;
+
+  useEffect(() => {
+    if (hunts) return;
+
+    let cancelled = false;
+    void getActiveHunts()
+      .then((rows) => {
+        if (cancelled) return;
+        setLoadedHunts(
+          rows.map((row) => {
+            const hunt = normalizeHunt(row as Record<string, unknown>);
+            return {
+              hunt,
+              coordinates: { lat: hunt.latitude, lng: hunt.longitude },
+            };
+          })
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setMapError("Gagal memuat hunt aktif");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hunts]);
+
+  const handleHuntClick = useCallback(
+    (hunt: Hunt) => {
+      if (onHuntClick) onHuntClick(hunt);
+      else router.push(`/hunt/${hunt.id}`);
+    },
+    [onHuntClick, router]
+  );
 
   useEffect(() => {
     if (!mapboxToken || !mapContainerRef.current) return;
@@ -102,15 +139,13 @@ export function HuntMap({
         });
 
         const markers: MBMarker[] = [];
-        hunts.forEach((marker) => {
+        visibleHunts.forEach((marker) => {
           const el = document.createElement("div");
           el.className =
             "flex size-8 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-2 ring-background transition-transform hover:scale-110";
           el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
 
-          if (onHuntClick) {
-            el.addEventListener("click", () => onHuntClick(marker.hunt));
-          }
+          el.addEventListener("click", () => handleHuntClick(marker.hunt));
 
           const m = new mbgl.Marker({ element: el })
             .setLngLat([marker.coordinates.lng, marker.coordinates.lat])
@@ -136,7 +171,7 @@ export function HuntMap({
       isMounted = false;
       cleanup?.();
     };
-  }, [mapboxToken, centerOn, hunts, onHuntClick]);
+  }, [mapboxToken, centerOn, visibleHunts, handleHuntClick]);
 
   if (mapboxToken) {
     return (
@@ -164,8 +199,8 @@ export function HuntMap({
   return (
     <div className={`relative flex-1 ${className}`}>
       <LeafletFallback
-        hunts={hunts}
-        onHuntClick={onHuntClick}
+        hunts={visibleHunts}
+        onHuntClick={handleHuntClick}
         isConnected={isConnected}
         onBuatHunt={() => router.push("/hunt/create")}
       />

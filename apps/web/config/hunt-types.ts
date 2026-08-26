@@ -41,10 +41,11 @@ export function getHuntTypeDescription(type: HuntType): string {
 }
 
 export enum HuntStatus {
-  Active = "Active",
-  Claimed = "Claimed",
-  Expired = "Expired",
-  Disputed = "Disputed",
+  Active = "active",
+  ClaimPending = "claim_pending",
+  Claimed = "claimed",
+  Expired = "expired",
+  Disputed = "disputed",
 }
 
 export enum ClaimStatus {

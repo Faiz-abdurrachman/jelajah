@@ -7,8 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-build:
+  web:
     runs-on: ubuntu-latest
+    env:
+      WALLET_SESSION_SECRET: ci-only-wallet-session-secret-32-characters
     defaults:
       run:
         working-directory: apps/web
@@ -24,6 +26,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
       - name: TypeScript check
         run: npx tsc --noEmit
 
@@ -32,3 +37,38 @@ jobs:
 
       - name: Next.js build
         run: npx next build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser and API security tests
+        run: npm run test:e2e
+
+  contracts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Check workspace
+        run: cargo check --workspace --locked
+
+      - name: Test escrow state machine
+        run: cargo test -p hunt-instance --locked
+
+      - name: Build instance WASM for factory integration
+        run: cargo build -p hunt-instance --target wasm32v1-none --release --locked
+
+      - name: Test factory deployment and funding
+        run: cargo test -p hunt-factory --features factory-integration --locked

@@ -12,6 +12,7 @@ import {
 import {
   getAddress,
   requestAccess,
+  signMessage,
   signTransaction,
 } from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
@@ -37,6 +38,49 @@ interface WalletContextValue {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
+function bytesToBase64(value: Uint8Array): string {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+async function authenticateWallet(address: string): Promise<void> {
+  const challengeResponse = await fetch("/api/auth/challenge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address }),
+  });
+  const challenge = (await challengeResponse.json()) as {
+    message?: string;
+    error?: string;
+  };
+  if (!challengeResponse.ok || !challenge.message) {
+    throw new Error(challenge.error ?? "Gagal membuat challenge wallet");
+  }
+
+  const signed = await signMessage(challenge.message, {
+    address,
+    networkPassphrase: getNetworkPassphrase(),
+  });
+  if (signed.error || !signed.signedMessage || signed.signerAddress !== address) {
+    throw new Error("Tanda tangan login ditolak atau memakai akun yang berbeda");
+  }
+
+  const signature =
+    typeof signed.signedMessage === "string"
+      ? signed.signedMessage
+      : bytesToBase64(new Uint8Array(signed.signedMessage));
+  const verifyResponse = await fetch("/api/auth/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address, signature }),
+  });
+  const verification = (await verifyResponse.json()) as { error?: string };
+  if (!verifyResponse.ok) {
+    throw new Error(verification.error ?? "Autentikasi wallet gagal");
+  }
+}
+
 // ─── Provider ─────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -46,12 +90,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if wallet was previously connected
+  // Restore only when the wallet address also has a valid server session.
   useEffect(() => {
     const checkExistingConnection = async () => {
       try {
-        const { address } = await getAddress();
-        if (address) {
+        const [{ address }, sessionResponse] = await Promise.all([
+          getAddress(),
+          fetch("/api/auth/session", { cache: "no-store" }),
+        ]);
+        if (address && sessionResponse.ok) {
+          const session = (await sessionResponse.json()) as { address?: string };
+          if (session.address !== address) return;
           setPublicKey(address);
         }
       } catch {
@@ -68,16 +117,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       // Freighter v6: requestAccess triggers permission popup and returns address
       const { address, error: accessError } = await requestAccess();
+      let resolvedAddress = address;
       if (accessError || !address) {
         // If requestAccess fails, try getAddress directly (already authorized)
         const { address: addr, error: addrError } = await getAddress();
         if (addrError || !addr) {
           throw new Error("Gagal mendapatkan address wallet. Pastikan Freighter terinstall dan unlocked.");
         }
-        setPublicKey(addr);
-      } else {
-        setPublicKey(address);
+        resolvedAddress = addr;
       }
+      await authenticateWallet(resolvedAddress);
+      setPublicKey(resolvedAddress);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Gagal connect ke Freighter";
@@ -88,6 +138,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const disconnect = useCallback(() => {
+    void fetch("/api/auth/session", { method: "DELETE" });
     setPublicKey(null);
     setBalance(null);
     setTransactions([]);

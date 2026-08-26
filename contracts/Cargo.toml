@@ -12,6 +12,12 @@ members = [
 [workspace.dependencies]
 soroban-sdk = "27.0.2"
 
+[patch.crates-io]
+# `soroban-sdk` 27.0.2 enables this crate for `testutils`, but the matching
+# release has not been published to crates.io. Pinning the matching official
+# Stellar tag keeps contract tests on exactly the same SDK source as runtime.
+soroban-ledger-snapshot = { git = "https://github.com/stellar/rs-soroban-sdk.git", tag = "v27.0.2" }
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true

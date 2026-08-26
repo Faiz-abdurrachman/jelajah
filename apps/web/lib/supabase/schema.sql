@@ -23,16 +23,20 @@ CREATE INDEX idx_users_xp ON users(xp DESC);
 
 CREATE TABLE IF NOT EXISTS hunts (
   id SERIAL PRIMARY KEY,
-  contract_id VARCHAR(56) UNIQUE,
+  hunt_id_hash CHAR(64) NOT NULL UNIQUE,
+  contract_id VARCHAR(56) NOT NULL UNIQUE,
+  create_tx_hash CHAR(64) NOT NULL UNIQUE,
   hider_pubkey VARCHAR(56) REFERENCES users(public_key),
+  asset_contract VARCHAR(56) NOT NULL,
   hunt_type VARCHAR(20) NOT NULL CHECK (hunt_type IN ('gps', 'quest', 'race', 'puzzle', 'photo')),
   clue TEXT NOT NULL,
+  clue_hash CHAR(64) NOT NULL,
   latitude DECIMAL(10,7) NOT NULL,
   longitude DECIMAL(10,7) NOT NULL,
   radius_meters INTEGER DEFAULT 50,
   amount_stroops BIGINT,
   deadline TIMESTAMP NOT NULL,
-  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'claimed', 'expired', 'disputed')),
+  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'claim_pending', 'claimed', 'expired', 'disputed')),
   photo_cid TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -50,6 +54,9 @@ CREATE TABLE IF NOT EXISTS claims (
   hunt_id INTEGER NOT NULL REFERENCES hunts(id) ON DELETE CASCADE,
   hunter_pubkey VARCHAR(56) NOT NULL REFERENCES users(public_key),
   photo_cid TEXT,
+  photo_hash CHAR(64) NOT NULL,
+  tx_hash CHAR(64) NOT NULL UNIQUE,
+  resolve_tx_hash CHAR(64) UNIQUE,
   gps_lat DECIMAL(10,7),
   gps_lng DECIMAL(10,7),
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'disputed')),
@@ -60,6 +67,8 @@ CREATE TABLE IF NOT EXISTS claims (
 CREATE INDEX idx_claims_hunt ON claims(hunt_id);
 CREATE INDEX idx_claims_hunter ON claims(hunter_pubkey);
 CREATE INDEX idx_claims_status ON claims(status);
+CREATE UNIQUE INDEX idx_claims_one_pending_per_hunt
+  ON claims(hunt_id) WHERE status = 'pending';
 
 -- ─── Disputes ─────────────────────────────────────────── L3
 
@@ -261,3 +270,42 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX idx_audit_log_action ON audit_log(action, created_at DESC);
+
+-- ─── Row Level Security ─────────────────────────────────
+-- Wallet ownership is verified by the Next.js API with SEP-53 signatures.
+-- The anon key may only read explicitly public tables; it cannot mutate data.
+
+REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  REVOKE INSERT, UPDATE, DELETE ON TABLES FROM anon, authenticated;
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hunts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disputes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE verifiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appeals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE brands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_hunts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leaderboard_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE streaks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_badges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "public profiles are readable" ON users FOR SELECT USING (true);
+CREATE POLICY "public hunts are readable" ON hunts FOR SELECT USING (true);
+CREATE POLICY "public disputes are readable" ON disputes FOR SELECT USING (true);
+CREATE POLICY "public verifiers are readable" ON verifiers FOR SELECT USING (true);
+CREATE POLICY "public appeals are readable" ON appeals FOR SELECT USING (true);
+CREATE POLICY "public brands are readable" ON brands FOR SELECT USING (true);
+CREATE POLICY "public campaigns are readable" ON campaigns FOR SELECT USING (true);
+CREATE POLICY "public campaign hunts are readable" ON campaign_hunts FOR SELECT USING (true);
+CREATE POLICY "public leaderboard is readable" ON leaderboard_snapshots FOR SELECT USING (true);
+CREATE POLICY "public streaks are readable" ON streaks FOR SELECT USING (true);
+CREATE POLICY "public badges are readable" ON user_badges FOR SELECT USING (true);
+CREATE POLICY "public activity is readable" ON community_activities FOR SELECT USING (true);

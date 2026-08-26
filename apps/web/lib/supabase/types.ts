@@ -31,10 +31,14 @@ export interface Database {
       hunts: {
         Row: {
           id: number;
+          hunt_id_hash: string;
           contract_id: string | null;
+          create_tx_hash: string;
           hider_pubkey: string;
+          asset_contract: string;
           hunt_type: string;
           clue: string;
+          clue_hash: string;
           latitude: number;
           longitude: number;
           radius_meters: number;
@@ -45,10 +49,14 @@ export interface Database {
           created_at: string;
         };
         Insert: {
+          hunt_id_hash: string;
           contract_id?: string | null;
+          create_tx_hash: string;
           hider_pubkey: string;
+          asset_contract: string;
           hunt_type: string;
           clue: string;
+          clue_hash: string;
           latitude: number;
           longitude: number;
           radius_meters?: number;
@@ -65,6 +73,9 @@ export interface Database {
           hunt_id: number;
           hunter_pubkey: string;
           photo_cid: string | null;
+          photo_hash: string;
+          tx_hash: string;
+          resolve_tx_hash: string | null;
           gps_lat: number | null;
           gps_lng: number | null;
           status: string;
@@ -75,6 +86,9 @@ export interface Database {
           hunt_id: number;
           hunter_pubkey: string;
           photo_cid?: string | null;
+          photo_hash: string;
+          tx_hash: string;
+          resolve_tx_hash?: string | null;
           gps_lat?: number | null;
           gps_lng?: number | null;
           status?: string;

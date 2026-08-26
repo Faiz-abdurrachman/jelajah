@@ -82,7 +82,7 @@ export default function WalletPage() {
               </CardHeader>
               <CardContent className="flex items-center justify-between">
                 <code className="text-sm font-mono">
-                  {truncateKey(publicKey!)}
+                  {truncateKey(publicKey ?? "")}
                 </code>
                 <Button variant="outline" size="sm" onClick={disconnect}>
                   Disconnect

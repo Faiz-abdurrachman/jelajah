@@ -1,6 +1,6 @@
 # JELAJAH — Hidden. Hunted. Claimed.
 
-> Real-world treasure hunt platform di **Stellar blockchain**. Siapa aja bisa bikin harta karun di lokasi fisik, orang lain cari, nemu, dan klaim hadiahnya — semuanya otomatis dan trustless.
+> Real-world treasure hunt platform di **Stellar blockchain**. MVP L2 saat ini mendukung GPS Hunt dengan escrow native XLM, bukti foto IPFS, approval hider, dan auto-release 24 jam.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js)](https://nextjs.org/)
@@ -47,7 +47,7 @@
 ## 🧪 E2E Tests
 
 ```
-Running 10 tests using 4 workers
+Running 13 tests using 4 workers
   ✅ Landing Page — page loads with title and CTA
   ✅ Landing Page — how it works section renders
   ✅ Landing Page — Lihat Peta button navigates to map
@@ -55,11 +55,14 @@ Running 10 tests using 4 workers
   ✅ Map Page — navbar is visible on map page
   ✅ Map Page — leaflet tiles load
   ✅ Hunt Create Flow — create hunt page loads and wizard renders
-  ✅ Hunt Create Flow — hunt types are selectable
+  ✅ Hunt Create Flow — hanya GPS aktif; tipe yang belum selesai terkunci
   ✅ Hunt Create Flow — navigation buttons present
   ✅ Hunt Detail Page — hunt detail page renders for a hunt ID
 
-  10 passed (8.7s)
+  ✅ Wallet API — challenge HttpOnly dan validasi address
+  ✅ Wallet API — mutation tanpa session ditolak
+
+  13 passed
 ```
 
 Run: `npm run test:e2e`
@@ -71,11 +74,9 @@ Run: `npm run test:e2e`
 **GitHub Actions** pipeline: `.github/workflows/ci.yml`
 
 ```yaml
-steps:
-  - checkout → setup node → npm ci
-  - npx tsc --noEmit       # TypeScript check
-  - npx eslint --max=0     # Lint check
-  - npx next build          # Production build
+jobs:
+  web: npm ci → dependency audit → typecheck → lint → build → Playwright
+  contracts: cargo check → 8 state-machine tests → build WASM → 3 factory integration tests
 ```
 
 ---
@@ -101,7 +102,7 @@ CREATE → HIDE → HUNT → CLAIM → REPEAT
 | Step | Actor | Detail |
 |---|---|---|
 | **CREATE** | Hider | Bikin hunt: pilih jenis, set clue, GPS lokasi, upload foto, set reward + deadline |
-| **HIDE** | Smart Contract | Reward dikunci di Claimable Balance Stellar |
+| **HIDE** | Smart Contract | Native XLM dipindahkan atomik ke escrow contract per hunt |
 | **HUNT** | Hunter | Lihat map, baca clue, navigasi ke lokasi |
 | **CLAIM** | Hunter | GPS verified → upload foto bukti → hider approve / auto cair 24 jam |
 
@@ -128,11 +129,14 @@ Semua contract udah di-**deploy ke Stellar Testnet**:
 
 | Contract | Address | Explorer |
 |---|---|---|
-| **hunt-factory** | `CDJLNOVGLXU4FLUWX7TLYER25UET5YNXPYI3TBNNSBWFDBZ5E6SLILF3` | [🔗](https://stellar.expert/explorer/testnet/contract/CDJLNOVGLXU4FLUWX7TLYER25UET5YNXPYI3TBNNSBWFDBZ5E6SLILF3) |
+| **hunt-factory (GPS escrow MVP)** | `CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55` | [🔗](https://stellar.expert/explorer/testnet/contract/CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55) |
 | **reputation** | `CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3` | [🔗](https://stellar.expert/explorer/testnet/contract/CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3) |
 | **dispute** | `CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB` | [🔗](https://stellar.expert/explorer/testnet/contract/CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB) |
 | **quest-chain** | `CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ` | [🔗](https://stellar.expert/explorer/testnet/contract/CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ) |
-| **hunt-instance** | WASM uploaded (factory deploy per hunt) | `8e292f95...` |
+| **hunt-instance** | WASM uploaded; factory deploy per hunt | `eee91c39c3700c63ad7a329738721b49a50722d9a000054ad876dca51d12dfce` |
+| **native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` | Testnet asset contract |
+
+Live smoke test menghasilkan instance `CCEX3DHRPFWFTDDTHPUJT7ZX7V2LZK53LLB477EDSNRTCQJELQZU3TRA`: escrow 1 XLM → hunter claim → hider approve → status `Claimed` dan escrow `0`.
 
 ---
 
@@ -155,7 +159,7 @@ Semua contract udah di-**deploy ke Stellar Testnet**:
 ### Prerequisites
 
 ```bash
-node >= 20
+node >= 20.9
 npm >= 10
 Rust >= 1.84 (untuk contracts)
 wasm32v1-none target (rustup target add wasm32v1-none)
@@ -186,6 +190,7 @@ NEXT_PUBLIC_REPUTATION_CONTRACT=<reputation-address>
 NEXT_PUBLIC_DISPUTE_CONTRACT=<dispute-address>
 NEXT_PUBLIC_QUEST_CHAIN_CONTRACT=<quest-chain-address>
 NEXT_PUBLIC_HUNT_INSTANCE_WASM_HASH=<wasm-hash>
+NEXT_PUBLIC_XLM_ASSET_CONTRACT=<native-xlm-sac-address>
 
 # Level (feature gate)
 NEXT_PUBLIC_CURRENT_LEVEL=2
@@ -193,7 +198,18 @@ NEXT_PUBLIC_CURRENT_LEVEL=2
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://vzohtezrdhselrommvcm.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<server-only-service-role-key>
+WALLET_SESSION_SECRET=<random-secret-minimum-32-characters>
+
+# Pinata — server only, jangan pakai prefix NEXT_PUBLIC_
+PINATA_API_KEY=<pinata-api-key>
+PINATA_SECRET_KEY=<pinata-secret-key>
+IPFS_GATEWAY=https://gateway.pinata.cloud
 ```
+
+Salin template dari `.env.example`. Terapkan `lib/supabase/migrations/001_secure_gps_mvp.sql` lewat Supabase SQL Editor sebelum menjalankan mutation API. Migration ini menambah field canonical chain, mengaktifkan RLS, dan menutup semua write dari anon key.
+
+> Wajib operasional: rotate `SUPABASE_SERVICE_ROLE_KEY` lama di dashboard Supabase karena key tersebut pernah masuk riwayat Git. Menghapus file lokal atau commit terbaru tidak membatalkan key yang sudah bocor.
 
 ### 3. Install & Connect Freighter Wallet
 
@@ -215,7 +231,9 @@ Buka [http://localhost:3000](http://localhost:3000)
 
 ```bash
 cd contracts
-cargo build --target wasm32v1-none
+cargo test -p hunt-instance
+cargo build -p hunt-instance --target wasm32v1-none --release
+cargo test -p hunt-factory --features factory-integration
 ```
 
 ---
@@ -227,11 +245,14 @@ cargo build --target wasm32v1-none
 cd apps/web && npm run dev          # Dev server (localhost:3000)
 npx tsc --noEmit                    # TypeScript check
 npx eslint . --max-warnings=0       # ESLint check
+npm audit --omit=dev --audit-level=high # Production dependency security
 npx next build                      # Production build
 
 # ── Contracts ──
-cd contracts && cargo build --target wasm32v1-none  # Build all contracts
-cargo test                          # Run contract tests (reputation)
+cd contracts && cargo check --workspace --locked
+cargo test -p hunt-instance --locked
+cargo build -p hunt-instance --target wasm32v1-none --release --locked
+cargo test -p hunt-factory --features factory-integration --locked
 
 # ── Deploy Contract ──
 stellar contract deploy \

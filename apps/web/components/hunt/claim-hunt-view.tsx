@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import type { Hunt } from "@/types";
 import { submitClaimTx, pollTx } from "@/lib/stellar/soroban";
-import { uploadToIpfs, isIpfsConfigured } from "@/lib/ipfs/pinata";
-import { insertClaim } from "@/lib/supabase/client";
+import { uploadToIpfs } from "@/lib/ipfs/pinata";
+import { indexConfirmedClaim } from "@/lib/api/mvp";
+import { insertDispute } from "@/lib/supabase/client";
 
 type ClaimPhase = "idle" | "checking" | "canClaim" | "uploading" | "signing" | "pending" | "approved" | "rejected";
 
@@ -46,7 +47,9 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [gpsWatchId, setGpsWatchId] = useState<number | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [pendingPhotoCid, setPendingPhotoCid] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimId, setClaimId] = useState<number | null>(null);
 
   // GPS tracking
   const startGps = useCallback(() => {
@@ -108,90 +111,74 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
   };
 
   const handleSubmit = async () => {
-    if (!photoFile || !currentPosition || !publicKey) return;
+    if (!publicKey) return;
     setClaimError(null);
 
-    // Phase 1: Upload photo to IPFS
-    setPhase("uploading");
-
-    let photoCidHex = "";
     try {
-      if (isIpfsConfigured()) {
-        const ipfsResult = await uploadToIpfs(photoFile);
-        photoCidHex = ipfsResult.cid.slice(0, 64).padEnd(64, "0");
-      } else {
-        // Fallback: hash the filename as a simple CID placeholder
-        const encoder = new TextEncoder();
-        const data = encoder.encode(photoFile.name + photoFile.size.toString());
-        const hashBuf = await crypto.subtle.digest("SHA-256", data);
-        photoCidHex = Array.from(new Uint8Array(hashBuf), (b) => b.toString(16).padStart(2, "0")).join("");
+      // A confirmed chain call can be safely re-indexed without submitting again.
+      if (txHash && pendingPhotoCid) {
+        setPhase("signing");
+        const confirmation = await pollTx(txHash, 30);
+        if (!confirmation.success) throw new Error(confirmation.error ?? "Transaksi belum terkonfirmasi");
+        const indexed = await indexConfirmedClaim({
+          huntId: hunt.id,
+          transactionHash: txHash,
+          photoCid: pendingPhotoCid,
+        });
+        setClaimId(indexed.id);
+        setPhase("pending");
+        return;
       }
-    } catch {
-      setClaimError("Gagal upload foto ke IPFS");
-      setPhase("canClaim");
-      return;
-    }
 
-    // Phase 2: Build & simulate contract tx
-    setPhase("signing");
+      if (!photoFile || !currentPosition) return;
+      setPhase("uploading");
+      const ipfsResult = await uploadToIpfs(photoFile);
+      const photoCid = ipfsResult.cid;
+      const hashBuffer = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(photoCid)
+      );
+      const photoHashHex = Array.from(new Uint8Array(hashBuffer), (byte) =>
+        byte.toString(16).padStart(2, "0")
+      ).join("");
 
-    const contractAddr = hunt.contractId;
-    if (!contractAddr) {
-      setClaimError("Contract hunt belum di-deploy");
-      setPhase("canClaim");
-      return;
-    }
+      setPhase("signing");
+      const contractAddr = hunt.contractId;
+      if (!contractAddr) throw new Error("Contract hunt belum di-deploy");
 
-    const prepareResult = await submitClaimTx(
-      publicKey,
-      contractAddr,
-      photoCidHex,
-      currentPosition.lat,
-      currentPosition.lng
-    );
+      const prepareResult = await submitClaimTx(
+        publicKey,
+        contractAddr,
+        photoHashHex,
+        currentPosition.lat,
+        currentPosition.lng
+      );
 
-    if (!prepareResult.success || !prepareResult.xdr) {
-      setClaimError(prepareResult.error ?? "Gagal menyiapkan transaksi");
-      setPhase("canClaim");
-      return;
-    }
+      if (!prepareResult.success || !prepareResult.xdr) {
+        throw new Error(prepareResult.error ?? "Gagal menyiapkan transaksi");
+      }
 
-    // Phase 3: Sign via Freighter & submit to network
-    const signResult = await signAndSubmit(prepareResult.xdr);
+      const signResult = await signAndSubmit(prepareResult.xdr);
+      if (!signResult.success || !signResult.hash) {
+        throw new Error(signResult.error ?? "Gagal sign/submit transaksi");
+      }
 
-    if (!signResult.success) {
-      setClaimError(signResult.error ?? "Gagal sign/submit transaksi");
-      setPhase("canClaim");
-      return;
-    }
+      setTxHash(signResult.hash);
+      setPendingPhotoCid(photoCid);
+      const confirmation = await pollTx(signResult.hash, 30);
+      if (!confirmation.success) throw new Error(confirmation.error ?? "Transaksi belum terkonfirmasi");
 
-    const submittedHash = signResult.hash;
-
-    // Phase 4: Persist claim to Supabase
-    try {
-      await insertClaim({
+      const indexed = await indexConfirmedClaim({
         huntId: hunt.id,
-        hunterPubkey: publicKey,
-        photoCid: photoCidHex || null,
-        gpsLat: currentPosition.lat,
-        gpsLng: currentPosition.lng,
-        txHash: submittedHash,
+        transactionHash: signResult.hash,
+        photoCid,
       });
-    } catch {
-      // Claim is on-chain even if DB insert fails — non-blocking
+      setClaimId(indexed.id);
+      setPhase("pending");
+    } catch (error) {
+      setClaimError(error instanceof Error ? error.message : "Gagal mengirim claim");
+      setPhase("canClaim");
     }
-
-    setTxHash(submittedHash);
-    setPhase("pending");
-
-    // Poll for tx confirmation and update UI
-    pollTx(submittedHash, 30).then((confirmed) => {
-      if (confirmed.success) {
-        setPhase("pending"); // stays pending until hider approves
-      }
-    }).catch(() => {
-      // Poll failed — tx will still be picked up by Supabase or horizon
-    });
   };
 
   if (!isConnected) {
@@ -365,24 +352,119 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
       )}
 
       {phase === "rejected" && (
-        <Card>
-          <CardContent className="py-8 text-center space-y-3">
-            <XCircle className="size-10 text-destructive mx-auto" />
-            <h3 className="font-semibold text-destructive">Claim Ditolak</h3>
-            <p className="text-sm text-muted-foreground">
-              Foto tidak sesuai dengan referensi hider
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/verify")}
-            >
-              Ajukan Dispute
-            </Button>
-          </CardContent>
-        </Card>
+        <DisputeCreateInline
+          huntId={hunt.id}
+          claimId={claimId}
+          hunterPubkey={publicKey}
+          onDisputeCreated={(disputeId: number) => {
+            router.push(`/dispute/${disputeId}`);
+          }}
+        />
       )}
     </div>
   );
 }
 
+function DisputeCreateInline({
+  huntId,
+  claimId,
+  hunterPubkey,
+  onDisputeCreated,
+}: {
+  huntId: number;
+  claimId: number | null;
+  hunterPubkey: string | null;
+  onDisputeCreated: (disputeId: number) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!hunterPubkey || !reason.trim() || claimId === null) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const disputeId = await insertDispute({
+        claimId,
+        huntId,
+        reason: reason.trim(),
+      });
+      onDisputeCreated(disputeId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal membuat dispute.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (showForm) {
+    return (
+      <Card>
+        <CardContent className="py-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-5 text-amber-500" />
+            <h3 className="font-semibold">Ajukan Dispute</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Jelaskan alasan kamu tidak setuju dengan penolakan ini.
+          </p>
+          <textarea
+            className="w-full min-h-[80px] rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+            placeholder="Alasan dispute..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          {error && (
+            <p className="text-sm text-destructive bg-destructive/10 rounded-md p-2">{error}</p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowForm(false)}
+              disabled={submitting}
+            >
+              Batal
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={handleSubmit}
+              disabled={!reason.trim() || submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Mengirim...
+                </>
+              ) : (
+                "Kirim Dispute"
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="py-8 text-center space-y-3">
+        <XCircle className="size-10 text-destructive mx-auto" />
+        <h3 className="font-semibold text-destructive">Claim Ditolak</h3>
+        <p className="text-sm text-muted-foreground">
+          Foto tidak sesuai dengan referensi hider
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowForm(true)}
+        >
+          Ajukan Dispute
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}

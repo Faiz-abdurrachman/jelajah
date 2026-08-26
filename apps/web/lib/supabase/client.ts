@@ -85,12 +85,17 @@ export async function getHuntById(huntId: number) {
 /**
  * Get hunts created by a specific user.
  */
-export async function getUserHunts(publicKey: string) {
+export async function getUserHunts(
+  publicKey: string,
+  limit = 10,
+  offset = 0
+) {
   const { data } = await supabase
     .from("hunts")
     .select("*")
     .eq("hider_pubkey", publicKey)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
   return data ?? [];
 }
@@ -98,12 +103,17 @@ export async function getUserHunts(publicKey: string) {
 /**
  * Get claims for a specific hunter.
  */
-export async function getUserClaims(publicKey: string) {
+export async function getUserClaims(
+  publicKey: string,
+  limit = 10,
+  offset = 0
+) {
   const { data } = await supabase
     .from("claims")
     .select("*, hunt:hunts(*)")
     .eq("hunter_pubkey", publicKey)
-    .order("submitted_at", { ascending: false });
+    .order("submitted_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
   return data ?? [];
 }
@@ -416,6 +426,55 @@ export async function getClaimsByHunt(huntId: number) {
     .select("*, hunter:users!claims_hunter_pubkey_fkey(*)")
     .eq("hunt_id", huntId)
     .order("submitted_at", { ascending: false });
+
+  return data ?? [];
+}
+
+/**
+ * Insert a new dispute record.
+ */
+export async function insertDispute(params: {
+  claimId: number;
+  huntId: number;
+  reason: string;
+}): Promise<number> {
+  const { data, error } = await supabase
+    .from("disputes")
+    .insert({
+      claim_id: params.claimId,
+      hunt_id: params.huntId,
+      reason: params.reason,
+      status: "voting",
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id as number;
+}
+
+/**
+ * Get all disputes for a specific hunt.
+ */
+export async function getDisputesByHunt(huntId: number) {
+  const { data } = await supabase
+    .from("disputes")
+    .select("*, claim:claims(*)")
+    .eq("hunt_id", huntId)
+    .order("created_at", { ascending: false });
+
+  return data ?? [];
+}
+
+/**
+ * Get active verifiers for dispute assignment.
+ */
+export async function getActiveVerifiers() {
+  const { data } = await supabase
+    .from("verifiers")
+    .select("*")
+    .eq("is_active", true)
+    .order("disputes_handled", { ascending: true });
 
   return data ?? [];
 }

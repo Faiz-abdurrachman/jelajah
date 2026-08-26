@@ -6,11 +6,40 @@ import { RequireLevel } from "@/components/feature-gate";
 import { QuestProgress } from "@/components/quest/quest-progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Swords, MapPin, Clock, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Swords, MapPin, Clock, User, Loader2, Upload } from "lucide-react";
 import { getAllQuests } from "@/lib/supabase/client";
-import { getQuestStepsTx } from "@/lib/stellar/soroban";
+import { getQuestStepsTx, getCurrentStepTx, setQuestStepsTx } from "@/lib/stellar/soroban";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import type { Hunt, QuestStep } from "@/types";
+
+function huntIdToQuestHex(huntId: number): string {
+  return Buffer.from(`quest:${huntId}`)
+    .toString("hex")
+    .padEnd(64, "0")
+    .slice(0, 64);
+}
+
+function defaultQuestSteps(): QuestStep[] {
+  return [
+    {
+      stepNumber: 0,
+      clueHash: "placeholder_hash_step_0_00000000000000",
+      gpsLat: -6.2088,
+      gpsLng: 106.8456,
+      radius: 30,
+      isFinal: false,
+    },
+    {
+      stepNumber: 1,
+      clueHash: "placeholder_hash_step_1_00000000000000",
+      gpsLat: -6.2100,
+      gpsLng: 106.8470,
+      radius: 30,
+      isFinal: true,
+    },
+  ];
+}
 
 interface QuestState {
   hunt: Hunt | null;
@@ -20,11 +49,12 @@ interface QuestState {
   claimed: boolean;
   loading: boolean;
   error: string | null;
+  isHider: boolean;
 }
 
 export default function QuestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { isConnected, publicKey } = useWallet();
+  const { isConnected, publicKey, signAndSubmit } = useWallet();
   const [state, setState] = useState<QuestState>({
     hunt: null,
     steps: [],
@@ -33,9 +63,14 @@ export default function QuestDetailPage() {
     claimed: false,
     loading: true,
     error: null,
+    isHider: false,
   });
+  const [seeding, setSeeding] = useState(false);
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   const questId = id ?? "1";
+  const huntId = parseInt(questId, 10);
+  const questIdHex = huntIdToQuestHex(isNaN(huntId) ? 1 : huntId);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,40 +85,65 @@ export default function QuestDetailPage() {
           (q: Record<string, unknown>) => String(q.id) === questId
         );
 
-        if (!cancelled) {
-          if (quest) {
-            let steps: QuestStep[] = [];
+        if (cancelled) return;
 
-            try {
-              const contractSteps = await getQuestStepsTx(
-                publicKey ?? "",
-                questId.padEnd(64, "0").slice(0, 64)
-              );
-              if (contractSteps.success && contractSteps.result) {
-                const decoded: QuestStep[] = JSON.parse(contractSteps.result) as QuestStep[];
-                if (Array.isArray(decoded) && decoded.length > 0) {
-                  steps = decoded;
-                }
-              }
-            } catch {
-              // Contract call failed or no steps — steps remain empty
+        if (quest) {
+          let steps: QuestStep[] = [];
+          let currentStep = 0;
+
+          const [stepsResult, currentStepResult] = await Promise.allSettled([
+            getQuestStepsTx(publicKey ?? "", questIdHex),
+            publicKey
+              ? getCurrentStepTx(publicKey, questIdHex)
+              : Promise.resolve(null),
+          ]);
+
+          if (
+            stepsResult.status === "fulfilled" &&
+            stepsResult.value.success &&
+            stepsResult.value.result
+          ) {
+            const decoded: QuestStep[] = JSON.parse(
+              stepsResult.value.result
+            ) as QuestStep[];
+            if (Array.isArray(decoded) && decoded.length > 0) {
+              steps = decoded;
             }
-
-            setState((prev) => ({
-              ...prev,
-              hunt: mapSupabaseToHunt(quest),
-              steps,
-              loading: false,
-            }));
-          } else {
-            setState((prev) => ({
-              ...prev,
-              hunt: null,
-              steps: [],
-              loading: false,
-              error: null,
-            }));
           }
+
+          if (
+            currentStepResult.status === "fulfilled" &&
+            currentStepResult.value &&
+            currentStepResult.value.success &&
+            currentStepResult.value.result
+          ) {
+            currentStep = parseInt(currentStepResult.value.result, 10);
+          }
+
+          const mapped = mapSupabaseToHunt(quest);
+          const isHider = publicKey
+            ? mapped.hiderPubkey === publicKey
+            : false;
+
+          setState({
+            hunt: mapped,
+            steps,
+            currentStep,
+            completedSteps: Array.from({ length: currentStep }, (_, i) => i),
+            claimed: currentStep >= steps.length && steps.length > 0,
+            loading: false,
+            error: null,
+            isHider,
+          });
+        } else {
+          setState((prev) => ({
+            ...prev,
+            hunt: null,
+            steps: [],
+            loading: false,
+            error: null,
+            isHider: false,
+          }));
         }
       } catch {
         if (!cancelled) {
@@ -93,6 +153,7 @@ export default function QuestDetailPage() {
             steps: [],
             loading: false,
             error: "Failed to load quest data.",
+            isHider: false,
           }));
         }
       }
@@ -103,29 +164,62 @@ export default function QuestDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [questId, publicKey]);
+  }, [questId, questIdHex, publicKey]);
 
-  const handleStepComplete = useCallback(
-    (stepNumber: number) => {
-      setState((prev) => {
-        const newCompleted = prev.completedSteps.includes(stepNumber)
-          ? prev.completedSteps
-          : [...prev.completedSteps, stepNumber];
-        return {
-          ...prev,
-          completedSteps: newCompleted,
-          currentStep: stepNumber + 1,
-        };
-      });
-    },
-    []
-  );
+  const handleStepComplete = useCallback((stepNumber: number) => {
+    setState((prev) => {
+      const newCompleted = prev.completedSteps.includes(stepNumber)
+        ? prev.completedSteps
+        : [...prev.completedSteps, stepNumber];
+      return {
+        ...prev,
+        completedSteps: newCompleted,
+        currentStep: stepNumber + 1,
+      };
+    });
+  }, []);
 
   const handleQuestClaimed = useCallback(() => {
     setState((prev) => ({ ...prev, claimed: true }));
   }, []);
 
-  const { hunt, steps, currentStep, completedSteps, claimed, loading, error } = state;
+  const handleSeedSteps = useCallback(async () => {
+    const pk = publicKey;
+    if (!pk) return;
+    setSeeding(true);
+    setSeedError(null);
+    try {
+      const steps = defaultQuestSteps();
+      const prep = await setQuestStepsTx(pk, questIdHex, steps);
+      if (!prep.success || !prep.xdr) {
+        setSeedError(prep.error ?? "Failed to prepare seed transaction.");
+        return;
+      }
+      const submit = await signAndSubmit(prep.xdr);
+      if (submit.success) {
+        setState((prev) => ({ ...prev, steps }));
+      } else {
+        setSeedError(
+          submit.error ?? "Failed to sign or submit seed transaction."
+        );
+      }
+    } catch (e) {
+      setSeedError(e instanceof Error ? e.message : "Seed failed.");
+    } finally {
+      setSeeding(false);
+    }
+  }, [publicKey, questIdHex, signAndSubmit]);
+
+  const {
+    hunt,
+    steps,
+    currentStep,
+    completedSteps,
+    claimed,
+    loading,
+    error,
+    isHider,
+  } = state;
 
   return (
     <RequireLevel level={3}>
@@ -143,7 +237,9 @@ export default function QuestDetailPage() {
         ) : error ? (
           <Card className="border-destructive/50">
             <CardContent className="p-6 text-center space-y-2">
-              <p className="text-destructive font-medium">Failed to load quest</p>
+              <p className="text-destructive font-medium">
+                Failed to load quest
+              </p>
               <p className="text-sm text-muted-foreground">{error}</p>
             </CardContent>
           </Card>
@@ -183,7 +279,7 @@ export default function QuestDetailPage() {
             </Card>
 
             <QuestProgress
-              questId={questId}
+              questId={questIdHex}
               steps={steps}
               currentStep={currentStep}
               completedSteps={completedSteps}
@@ -191,10 +287,50 @@ export default function QuestDetailPage() {
               onQuestClaimed={handleQuestClaimed}
             />
 
-            {steps.length === 0 && (
+            {steps.length === 0 && isHider && isConnected && (
+              <Card className="border-purple-500/50 bg-purple-50/50 dark:bg-purple-950/20">
+                <CardContent className="p-6 text-center space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-purple-700 dark:text-purple-400">
+                      Initialize Quest Steps
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Seed quest steps on-chain so hunters can find and complete
+                      them. This writes {defaultQuestSteps().length} example
+                      steps to the contract.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleSeedSteps}
+                    disabled={seeding}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    {seeding ? (
+                      <>
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Seeding...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="size-4 mr-2" />
+                        Seed Quest Steps
+                      </>
+                    )}
+                  </Button>
+                  {seedError && (
+                    <p className="text-sm text-destructive bg-destructive/10 rounded-md p-2">
+                      {seedError}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {steps.length === 0 && !isHider && (
               <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
                 <CardContent className="p-4 text-center text-sm text-amber-700 dark:text-amber-400">
-                  Quest steps belum tersedia on-chain. Contract perlu diinisialisasi dengan data steps terlebih dahulu.
+                  Quest steps belum tersedia on-chain. Hider perlu
+                  menginisialisasi steps terlebih dahulu.
                 </CardContent>
               </Card>
             )}

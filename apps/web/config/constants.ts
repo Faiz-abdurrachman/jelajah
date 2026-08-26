@@ -19,8 +19,8 @@ export const NETWORKS = {
 
 // Hunt Rules
 export const HUNT_RULES = {
-  minReward: 10_000,
-  maxRewardFree: 5_000_000,
+  minReward: 1,
+  maxRewardFree: 100,
   minDeadlineHours: 1,
   maxDeadlineDays: 30,
   minGpsRadius: 10,

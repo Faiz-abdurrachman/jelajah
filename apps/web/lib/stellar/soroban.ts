@@ -157,19 +157,41 @@ export async function computeVoteHash(pubKey: string, vote: boolean, saltHex: st
 }
 
 export async function createHuntTx(
-  pubKey: string, amountStroops: bigint, gpsLat: number, gpsLng: number,
+  pubKey: string, huntIdHex: string, amountStroops: bigint, gpsLat: number, gpsLng: number,
   radius: number, deadlineUnix: number, clueHashHex: string, huntType: number
 ): Promise<TxResult> {
   const c = getHuntFactory();
   if (!c) return { hash: "", success: false, error: "Hunt Factory not deployed" };
   const args: xdr.ScVal[] = [
-    toScAddress(pubKey), toScI128(amountStroops),
+    toScBytesN32(huntIdHex), toScAddress(pubKey), toScI128(amountStroops),
     toScI64(BigInt(Math.round(gpsLat * 10_000_000))),
     toScI64(BigInt(Math.round(gpsLng * 10_000_000))),
     toScU32(radius), toScU64(BigInt(deadlineUnix)),
     toScBytesN32(clueHashHex), toScU32(huntType),
   ];
   return prepareContractTx(pubKey, c, "create_hunt", args);
+}
+
+export async function approveClaimTx(
+  pubKey: string,
+  instanceAddr: string
+): Promise<TxResult> {
+  const contract = getHuntInstance(instanceAddr);
+  if (!contract) return { hash: "", success: false, error: "Instance not found" };
+  return prepareContractTx(pubKey, contract, "approve", [toScAddress(pubKey)]);
+}
+
+export async function rejectClaimTx(
+  pubKey: string,
+  instanceAddr: string,
+  reasonHashHex: string
+): Promise<TxResult> {
+  const contract = getHuntInstance(instanceAddr);
+  if (!contract) return { hash: "", success: false, error: "Instance not found" };
+  return prepareContractTx(pubKey, contract, "reject", [
+    toScAddress(pubKey),
+    toScBytesN32(reasonHashHex),
+  ]);
 }
 
 export async function submitClaimTx(
@@ -305,6 +327,30 @@ export async function getCurrentStepTx(pubKey: string, questIdHex: string): Prom
 }
 
 // ─── L3 Dispute ───────────────────────────────────────
+
+/**
+ * Create a dispute on-chain.
+ * disputeIdHex, claimIdHex, huntIdHex: 32-byte hex identifiers.
+ * verifiers: array of Stellar public keys (56-char G... strings).
+ */
+export async function createDisputeTx(
+  pubKey: string,
+  disputeIdHex: string,
+  claimIdHex: string,
+  huntIdHex: string,
+  verifiers: string[]
+): Promise<TxResult> {
+  const c = getDisputeContract();
+  if (!c) return { hash: "", success: false, error: "Dispute not deployed" };
+  const verifierScVals = verifiers.map((v) => toScAddress(v));
+  const args: xdr.ScVal[] = [
+    toScBytesN32(disputeIdHex),
+    toScBytesN32(claimIdHex),
+    toScBytesN32(huntIdHex),
+    xdr.ScVal.scvVec(verifierScVals),
+  ];
+  return prepareContractTx(pubKey, c, "create_dispute", args);
+}
 
 export async function commitVoteTx(
   pubKey: string, disputeIdHex: string, voteHashHex: string

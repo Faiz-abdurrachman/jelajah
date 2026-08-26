@@ -5,7 +5,13 @@ import { CheckCircle, XCircle, Clock, MapPin, User, ImageIcon } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getPendingClaims, updateClaimStatus } from "@/lib/supabase/client";
+import { useWallet } from "@/components/wallet/wallet-provider";
+import { loadPendingClaims, resolveConfirmedClaim } from "@/lib/api/mvp";
+import {
+  approveClaimTx,
+  pollTx,
+  rejectClaimTx,
+} from "@/lib/stellar/soroban";
 import type { Hunt } from "@/types";
 
 interface PendingClaim {
@@ -23,25 +29,32 @@ interface HiderApproveViewProps {
   onClaimResolved: () => void;
 }
 
+interface PendingResolution {
+  claimId: number;
+  transactionHash: string;
+  resolution: "approve" | "reject";
+}
+
 export function HiderApproveView({ hunt, onClaimResolved }: HiderApproveViewProps) {
+  const { publicKey, signAndSubmit } = useWallet();
   const [claims, setClaims] = useState<PendingClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingClaimId, setActingClaimId] = useState<number | null>(null);
+  const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
       try {
-        const data = await getPendingClaims(hunt.id);
-        const mapped = data.map((row: Record<string, unknown>) => ({
+        const data = await loadPendingClaims(hunt.id);
+        const mapped = data.map((row) => ({
           id: Number(row.id),
           hunterPubkey: String(row.hunter_pubkey ?? ""),
           photoCid: row.photo_cid ? String(row.photo_cid) : null,
-          gpsLat: row.gps_lat ? Number(row.gps_lat) : null,
-          gpsLng: row.gps_lng ? Number(row.gps_lng) : null,
+          gpsLat: row.gps_lat !== null ? Number(row.gps_lat) : null,
+          gpsLng: row.gps_lng !== null ? Number(row.gps_lng) : null,
           submittedAt: String(row.submitted_at ?? ""),
-          status: String(row.status ?? "pending"),
         }));
         setClaims(mapped);
       } catch {
@@ -62,11 +75,31 @@ export function HiderApproveView({ hunt, onClaimResolved }: HiderApproveViewProp
     setActingClaimId(claimId);
     setActionError(null);
     try {
-      await updateClaimStatus(claimId, "approved");
+      if (pendingResolution?.claimId === claimId && pendingResolution.resolution === "approve") {
+        await resolveConfirmedClaim(claimId, pendingResolution.transactionHash, "approve");
+        setPendingResolution(null);
+        setClaims((prev) => prev.filter((c) => c.id !== claimId));
+        onClaimResolved();
+        return;
+      }
+      if (!publicKey || !hunt.contractId) throw new Error("Wallet atau contract belum siap");
+      const prepared = await approveClaimTx(publicKey, hunt.contractId);
+      if (!prepared.success || !prepared.xdr) {
+        throw new Error(prepared.error ?? "Gagal menyiapkan approval");
+      }
+      const submitted = await signAndSubmit(prepared.xdr);
+      if (!submitted.success || !submitted.hash) {
+        throw new Error(submitted.error ?? "Gagal mengirim approval");
+      }
+      const confirmation = await pollTx(submitted.hash, 30);
+      if (!confirmation.success) throw new Error(confirmation.error ?? "Approval belum terkonfirmasi");
+      setPendingResolution({ claimId, transactionHash: submitted.hash, resolution: "approve" });
+      await resolveConfirmedClaim(claimId, submitted.hash, "approve");
+      setPendingResolution(null);
       setClaims((prev) => prev.filter((c) => c.id !== claimId));
       onClaimResolved();
-    } catch {
-      setActionError("Gagal approve klaim.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Gagal approve klaim.");
     } finally {
       setActingClaimId(null);
     }
@@ -76,11 +109,40 @@ export function HiderApproveView({ hunt, onClaimResolved }: HiderApproveViewProp
     setActingClaimId(claimId);
     setActionError(null);
     try {
-      await updateClaimStatus(claimId, "rejected");
+      if (pendingResolution?.claimId === claimId && pendingResolution.resolution === "reject") {
+        await resolveConfirmedClaim(claimId, pendingResolution.transactionHash, "reject");
+        setPendingResolution(null);
+        setClaims((prev) => prev.filter((c) => c.id !== claimId));
+        onClaimResolved();
+        return;
+      }
+      if (!publicKey || !hunt.contractId) throw new Error("Wallet atau contract belum siap");
+      const reason = window.prompt("Alasan penolakan claim:");
+      if (!reason?.trim()) return;
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(reason.trim())
+      );
+      const reasonHash = Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, "0")
+      ).join("");
+      const prepared = await rejectClaimTx(publicKey, hunt.contractId, reasonHash);
+      if (!prepared.success || !prepared.xdr) {
+        throw new Error(prepared.error ?? "Gagal menyiapkan penolakan");
+      }
+      const submitted = await signAndSubmit(prepared.xdr);
+      if (!submitted.success || !submitted.hash) {
+        throw new Error(submitted.error ?? "Gagal mengirim penolakan");
+      }
+      const confirmation = await pollTx(submitted.hash, 30);
+      if (!confirmation.success) throw new Error(confirmation.error ?? "Penolakan belum terkonfirmasi");
+      setPendingResolution({ claimId, transactionHash: submitted.hash, resolution: "reject" });
+      await resolveConfirmedClaim(claimId, submitted.hash, "reject");
+      setPendingResolution(null);
       setClaims((prev) => prev.filter((c) => c.id !== claimId));
       onClaimResolved();
-    } catch {
-      setActionError("Gagal reject klaim.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Gagal reject klaim.");
     } finally {
       setActingClaimId(null);
     }
@@ -150,10 +212,15 @@ export function HiderApproveView({ hunt, onClaimResolved }: HiderApproveViewProp
                       </span>
                     )}
                     {claim.photoCid && (
-                      <span className="flex items-center gap-1">
+                      <a
+                        className="flex items-center gap-1 underline-offset-2 hover:underline"
+                        href={`https://gateway.pinata.cloud/ipfs/${claim.photoCid}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         <ImageIcon className="size-3" />
                         IPFS: {claim.photoCid.slice(0, 10)}...
-                      </span>
+                      </a>
                     )}
                   </div>
                 </div>
@@ -165,24 +232,36 @@ export function HiderApproveView({ hunt, onClaimResolved }: HiderApproveViewProp
                   size="sm"
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                   onClick={() => handleApprove(claim.id)}
-                  disabled={actingClaimId !== null}
+                  disabled={
+                    actingClaimId !== null ||
+                    (pendingResolution?.claimId === claim.id &&
+                      pendingResolution.resolution !== "approve")
+                  }
                 >
                   {actingClaimId === claim.id ? (
                     <Clock className="size-4 mr-1 animate-spin" />
                   ) : (
                     <CheckCircle className="size-4 mr-1" />
                   )}
-                  Approve
+                  {pendingResolution?.claimId === claim.id && pendingResolution.resolution === "approve"
+                    ? "Coba Index Ulang"
+                    : "Approve"}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   className="flex-1 border-red-500/50 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                   onClick={() => handleReject(claim.id)}
-                  disabled={actingClaimId !== null}
+                  disabled={
+                    actingClaimId !== null ||
+                    (pendingResolution?.claimId === claim.id &&
+                      pendingResolution.resolution !== "reject")
+                  }
                 >
                   <XCircle className="size-4 mr-1" />
-                  Reject
+                  {pendingResolution?.claimId === claim.id && pendingResolution.resolution === "reject"
+                    ? "Coba Index Ulang"
+                    : "Reject"}
                 </Button>
               </div>
             </div>

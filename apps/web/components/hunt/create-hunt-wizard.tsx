@@ -20,9 +20,9 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { HUNT_RULES, MAP_CONFIG } from "@/config/constants";
 import { HuntType, HUNT_TYPE_LABELS, HUNT_TYPE_DESCRIPTIONS } from "@/config/hunt-types";
 import type { HuntType as HuntTypeEnum } from "@/config/hunt-types";
-import { createHuntTx } from "@/lib/stellar/soroban";
-import { uploadToIpfs, isIpfsConfigured } from "@/lib/ipfs/pinata";
-import { insertHunt } from "@/lib/supabase/client";
+import { createHuntTx, pollTx } from "@/lib/stellar/soroban";
+import { uploadToIpfs } from "@/lib/ipfs/pinata";
+import { indexConfirmedHunt } from "@/lib/api/mvp";
 
 // ─── Types ───────────────────────────────────────────
 
@@ -62,6 +62,19 @@ const HUNT_TYPE_OPTIONS: {
   { type: HuntType.Photo, icon: Camera, color: "text-rose-500" },
 ];
 
+function randomBytes32Hex(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
 // ─── Component ───────────────────────────────────────
 
 export function CreateHuntWizard() {
@@ -72,6 +85,11 @@ export function CreateHuntWizard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [pendingIndex, setPendingIndex] = useState<{
+    transactionHash: string;
+    huntIdHash: string;
+    photoCid: string | null;
+  } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const updateField = <K extends keyof HuntFormData>(
@@ -83,11 +101,11 @@ export function CreateHuntWizard() {
 
   const canProceed = (): boolean => {
     switch (step) {
-      case 0: return form.huntType !== null;
+      case 0: return form.huntType === HuntType.Gps;
       case 1: return form.clue.trim().length > 0;
       case 2: return form.latitude.trim() !== "" && form.longitude.trim() !== "";
       case 3: {
-        const amount = parseInt(form.amount, 10);
+        const amount = parseFloat(form.amount);
         return !isNaN(amount) && amount >= HUNT_RULES.minReward && amount <= HUNT_RULES.maxRewardFree;
       }
       case 4: return form.deadline.trim() !== "";
@@ -109,22 +127,35 @@ export function CreateHuntWizard() {
       await connect();
       return;
     }
+    const pk = publicKey;
+    const huntType = form.huntType;
+    if (!pk || huntType === null) return;
+
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
-      // Step 1: Upload photo to IPFS (if file provided and Pinata configured)
+      // If the chain call already succeeded, retry only the idempotent index step.
+      if (pendingIndex) {
+        const confirmation = await pollTx(pendingIndex.transactionHash, 30);
+        if (!confirmation.success) {
+          throw new Error(confirmation.error ?? "Transaksi belum terkonfirmasi");
+        }
+        await indexConfirmedHunt({ ...pendingIndex, clue: form.clue });
+        setIsSuccess(true);
+        return;
+      }
+
+      // Step 1: Upload optional reference photo through the authenticated server.
       let photoCid = "";
-      if (form.photoFile && isIpfsConfigured()) {
+      if (form.photoFile) {
         const ipfsResult = await uploadToIpfs(form.photoFile);
         photoCid = ipfsResult.cid;
       }
 
-      // Step 2: Generate clue hash (simplified — in production use SHA256)
-      const clueHashHex = Buffer.from(form.clue + photoCid)
-        .toString("hex")
-        .padEnd(64, "0")
-        .slice(0, 64);
+      // Step 2: Generate canonical IDs and metadata hash.
+      const huntIdHash = randomBytes32Hex();
+      const clueHashHex = await sha256Hex(form.clue + photoCid);
 
       // Step 3: Calculate deadline unix timestamp
       const deadlineUnix = Math.floor(new Date(form.deadline).getTime() / 1000);
@@ -134,14 +165,15 @@ export function CreateHuntWizard() {
 
       // Step 5: Build & simulate contract tx
       const result = await createHuntTx(
-        publicKey!,
+        pk,
+        huntIdHash,
         amountStroops,
         parseFloat(form.latitude),
         parseFloat(form.longitude),
         parseInt(form.radius.toString(), 10),
         deadlineUnix,
         clueHashHex,
-        form.huntType!
+        huntType
       );
 
       if (!result.success || !result.xdr) {
@@ -157,24 +189,19 @@ export function CreateHuntWizard() {
       }
 
       setTxHash(submitResult.hash);
+      const indexPayload = {
+        transactionHash: submitResult.hash,
+        huntIdHash,
+        photoCid: photoCid || null,
+      };
+      setPendingIndex(indexPayload);
 
-      // Step 7: Persist hunt to Supabase
-      try {
-        await insertHunt({
-          contractId: submitResult.hash,
-          hiderPubkey: publicKey!,
-          huntType: HUNT_TYPE_LABELS[form.huntType!],
-          clue: form.clue,
-          latitude: parseFloat(form.latitude),
-          longitude: parseFloat(form.longitude),
-          radiusMeters: parseInt(form.radius.toString(), 10),
-          amountStroops: Number(amountStroops),
-          deadline: form.deadline,
-          photoCid: photoCid || null,
-        });
-      } catch {
-        // Hunt is on-chain even if DB insert fails — non-blocking
+      // Step 7: wait for finality, then let the server verify and index the call.
+      const confirmation = await pollTx(submitResult.hash, 30);
+      if (!confirmation.success) {
+        throw new Error(confirmation.error ?? "Transaksi belum terkonfirmasi");
       }
+      await indexConfirmedHunt({ ...indexPayload, clue: form.clue });
 
       setIsSuccess(true);
     } catch (err) {
@@ -286,7 +313,13 @@ export function CreateHuntWizard() {
             onClick={handleSubmit}
             disabled={isSubmitting}
           >
-            {isConnected ? (isSubmitting ? "Memproses..." : "Buat Hunt") : "Connect Wallet"}
+            {isConnected
+              ? isSubmitting
+                ? "Memproses..."
+                : pendingIndex
+                  ? "Coba Index Ulang"
+                  : "Buat Hunt"
+              : "Connect Wallet"}
           </Button>
         )}
       </div>
@@ -310,16 +343,19 @@ function StepTypeSelect({
         Apa jenis harta karun yang mau kamu buat?
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {HUNT_TYPE_OPTIONS.map(({ type, icon: Icon, color }) => (
+        {HUNT_TYPE_OPTIONS.map(({ type, icon: Icon, color }) => {
+          const available = type === HuntType.Gps;
+          return (
           <button
             key={type}
             type="button"
-            onClick={() => updateField("huntType", type)}
+            onClick={() => available && updateField("huntType", type)}
+            disabled={!available}
             className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-all hover:border-primary/50 ${
               form.huntType === type
                 ? "border-primary bg-primary/5 ring-1 ring-primary"
                 : "bg-card"
-            }`}
+            } ${available ? "" : "cursor-not-allowed opacity-50"}`}
           >
             <div className={`rounded-full bg-muted p-2 ${color}`}>
               <Icon className="size-5" />
@@ -327,6 +363,11 @@ function StepTypeSelect({
             <div>
               <div className="font-medium text-sm">
                 {HUNT_TYPE_LABELS[type]}
+                {!available && (
+                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    Segera
+                  </span>
+                )}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {HUNT_TYPE_DESCRIPTIONS[type]}
@@ -336,7 +377,8 @@ function StepTypeSelect({
               <Check className="ml-auto size-4 text-primary shrink-0 mt-1" />
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -457,7 +499,7 @@ function StepReward({
   form: HuntFormData;
   updateField: (k: keyof HuntFormData, v: HuntFormData[keyof HuntFormData]) => void;
 }) {
-  const amount = parseInt(form.amount, 10);
+  const amount = parseFloat(form.amount);
   const isValid = !isNaN(amount) && amount > 0;
 
   return (
@@ -470,33 +512,20 @@ function StepReward({
       <div className="flex gap-2 mb-4">
         <div className="flex-1">
           <label className="block text-sm font-medium mb-1.5">
-            Jumlah (IDR)
+            Jumlah XLM
           </label>
           <Input
             type="number"
-            placeholder="Min Rp 10.000"
+            min={HUNT_RULES.minReward}
+            max={HUNT_RULES.maxRewardFree}
+            step="0.1"
+            placeholder="Contoh: 5"
             value={form.amount}
             onChange={(e) => updateField("amount", e.target.value)}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1.5">Asset</label>
-          <div className="flex gap-1">
-            <Button
-              variant={form.asset === "XLM" ? "default" : "outline"}
-              size="sm"
-              onClick={() => updateField("asset", "XLM")}
-            >
-              XLM
-            </Button>
-            <Button
-              variant={form.asset === "USDC" ? "default" : "outline"}
-              size="sm"
-              onClick={() => updateField("asset", "USDC")}
-            >
-              USDC
-            </Button>
-          </div>
+        <div className="self-end rounded-md border bg-muted px-4 py-2 text-sm font-medium">
+          XLM
         </div>
       </div>
 
@@ -505,12 +534,12 @@ function StepReward({
           <div className="flex justify-between mb-1">
             <span className="text-muted-foreground">Reward</span>
             <span className="font-medium">
-              Rp {amount.toLocaleString("id-ID")}
+              {amount.toLocaleString("id-ID", { maximumFractionDigits: 7 })} XLM
             </span>
           </div>
           {amount > HUNT_RULES.maxRewardFree && (
             <p className="text-xs text-destructive mt-2">
-              Max reward untuk free user Rp 5.000.000. Upgrade untuk reward lebih besar.
+              Maksimum reward MVP adalah {HUNT_RULES.maxRewardFree} XLM.
             </p>
           )}
         </div>
@@ -586,7 +615,7 @@ function StepReview({
         <ReviewRow label="Radius" value={`${form.radius} meter`} />
         <ReviewRow
           label="Reward"
-          value={`Rp ${parseInt(form.amount, 10).toLocaleString("id-ID")} (${form.asset})`}
+          value={`${parseFloat(form.amount).toLocaleString("id-ID", { maximumFractionDigits: 7 })} XLM`}
         />
         <ReviewRow
           label="Deadline"

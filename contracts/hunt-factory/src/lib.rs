@@ -1,70 +1,34 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, xdr::ToXdr, Address, BytesN, Env};
+
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token::TokenClient,
+    Address, BytesN, Env, MuxedAddress,
+};
 
 mod event;
 
-#[contract]
-pub struct HuntFactory;
+const TTL_THRESHOLD_LEDGERS: u32 = 100_000;
+const TTL_EXTEND_TO_LEDGERS: u32 = 2_000_000;
+const GPS_SCALE: i64 = 10_000_000;
 
-#[contractimpl]
-impl HuntFactory {
-    /// Buat hunt baru → deploy hunt-instance contract
-    pub fn create_hunt(
-        env: Env,
-        hider: Address,
-        amount: i128,
-        gps_lat: i64,
-        gps_lng: i64,
-        radius: u32,
-        deadline: u64,
-        clue_hash: BytesN<32>,
-        hunt_type: u32,
-    ) -> BytesN<32> {
-        hider.require_auth();
-
-        // Generate unique hunt ID (hash of hider + counter)
-        let count = env.storage().instance().get::<_, u32>(&DataKey::Count).unwrap_or(0);
-        let new_count = count + 1;
-        env.storage().instance().set(&DataKey::Count, &new_count);
-
-        let hunt_id: BytesN<32> = env.crypto().sha256(
-            &(hider.clone(), new_count).to_xdr(&env)
-        ).into();
-
-        // Store hunt metadata
-        let hunt = Hunt {
-            hider: hider.clone(),
-            amount,
-            gps_lat,
-            gps_lng,
-            radius,
-            deadline,
-            clue_hash,
-            hunt_type,
-        };
-        env.storage().instance().set(&DataKey::Hunt(hunt_id.clone()), &hunt);
-
-        // Emit event
-        event::hunt_created(&env, hunt_id.clone(), hider, amount, deadline);
-
-        hunt_id
-    }
-
-    /// Get total number of hunts created
-    pub fn get_hunt_count(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::Count).unwrap_or(0)
-    }
-
-    /// Get hunt details by ID
-    pub fn get_hunt(env: Env, hunt_id: BytesN<32>) -> Option<Hunt> {
-        env.storage().instance().get(&DataKey::Hunt(hunt_id))
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[contracterror]
+pub enum ContractError {
+    HuntAlreadyExists = 1,
+    InvalidAmount = 2,
+    InvalidDeadline = 3,
+    InvalidRadius = 4,
+    InvalidCoordinates = 5,
+    UnsupportedHuntType = 6,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct Hunt {
+    pub hunt_id: BytesN<32>,
+    pub instance: Address,
     pub hider: Address,
+    pub asset: Address,
     pub amount: i128,
     pub gps_lat: i64,
     pub gps_lng: i64,
@@ -76,7 +40,192 @@ pub struct Hunt {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
-pub enum DataKey {
+enum DataKey {
     Count,
+    InstanceWasmHash,
+    Asset,
     Hunt(BytesN<32>),
 }
+
+#[contract]
+pub struct HuntFactory;
+
+#[contractimpl]
+impl HuntFactory {
+    pub fn __constructor(env: Env, instance_wasm_hash: BytesN<32>, asset: Address) {
+        env.storage()
+            .instance()
+            .set(&DataKey::InstanceWasmHash, &instance_wasm_hash);
+        env.storage().instance().set(&DataKey::Asset, &asset);
+        env.storage().instance().set(&DataKey::Count, &0_u32);
+        Self::bump_ttl(&env);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_hunt(
+        env: Env,
+        hunt_id: BytesN<32>,
+        hider: Address,
+        amount: i128,
+        gps_lat: i64,
+        gps_lng: i64,
+        radius: u32,
+        deadline: u64,
+        clue_hash: BytesN<32>,
+        hunt_type: u32,
+    ) -> Address {
+        hider.require_auth();
+        Self::bump_ttl(&env);
+        Self::validate_hunt(
+            &env,
+            amount,
+            gps_lat,
+            gps_lng,
+            radius,
+            deadline,
+            hunt_type,
+        );
+
+        let hunt_key = DataKey::Hunt(hunt_id.clone());
+        if env.storage().instance().has(&hunt_key) {
+            panic_with_error!(&env, ContractError::HuntAlreadyExists);
+        }
+
+        let instance_wasm_hash: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::InstanceWasmHash)
+            .expect("factory is not configured");
+        let asset: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Asset)
+            .expect("factory is not configured");
+
+        let instance = env
+            .deployer()
+            .with_current_contract(hunt_id.clone())
+            .deploy_v2(
+                instance_wasm_hash,
+                (
+                    hunt_id.clone(),
+                    hider.clone(),
+                    asset.clone(),
+                    amount,
+                    gps_lat,
+                    gps_lng,
+                    radius,
+                    deadline,
+                    clue_hash.clone(),
+                    hunt_type,
+                ),
+            );
+
+        let destination = MuxedAddress::from(&instance);
+        TokenClient::new(&env, &asset).transfer(&hider, &destination, &amount);
+
+        let hunt = Hunt {
+            hunt_id: hunt_id.clone(),
+            instance: instance.clone(),
+            hider: hider.clone(),
+            asset: asset.clone(),
+            amount,
+            gps_lat,
+            gps_lng,
+            radius,
+            deadline,
+            clue_hash,
+            hunt_type,
+        };
+        env.storage().instance().set(&hunt_key, &hunt);
+
+        let count: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Count)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::Count, &count.saturating_add(1));
+
+        event::hunt_created(
+            &env,
+            hunt_id,
+            hider,
+            instance.clone(),
+            asset,
+            amount,
+            deadline,
+        );
+
+        instance
+    }
+
+    pub fn get_hunt_count(env: Env) -> u32 {
+        Self::bump_ttl(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::Count)
+            .unwrap_or(0)
+    }
+
+    pub fn get_hunt(env: Env, hunt_id: BytesN<32>) -> Option<Hunt> {
+        Self::bump_ttl(&env);
+        env.storage().instance().get(&DataKey::Hunt(hunt_id))
+    }
+
+    pub fn get_instance(env: Env, hunt_id: BytesN<32>) -> Option<Address> {
+        Self::bump_ttl(&env);
+        let hunt: Option<Hunt> = env.storage().instance().get(&DataKey::Hunt(hunt_id));
+        hunt.map(|item| item.instance)
+    }
+
+    pub fn get_asset(env: Env) -> Address {
+        Self::bump_ttl(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::Asset)
+            .expect("factory is not configured")
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn validate_hunt(
+        env: &Env,
+        amount: i128,
+        gps_lat: i64,
+        gps_lng: i64,
+        radius: u32,
+        deadline: u64,
+        hunt_type: u32,
+    ) {
+        if amount <= 0 {
+            panic_with_error!(env, ContractError::InvalidAmount);
+        }
+        if deadline <= env.ledger().timestamp() {
+            panic_with_error!(env, ContractError::InvalidDeadline);
+        }
+        if radius == 0 {
+            panic_with_error!(env, ContractError::InvalidRadius);
+        }
+        if hunt_type != 0 {
+            panic_with_error!(env, ContractError::UnsupportedHuntType);
+        }
+
+        let max_lat = 90 * GPS_SCALE;
+        let max_lng = 180 * GPS_SCALE;
+        if !(-max_lat..=max_lat).contains(&gps_lat)
+            || !(-max_lng..=max_lng).contains(&gps_lng)
+        {
+            panic_with_error!(env, ContractError::InvalidCoordinates);
+        }
+    }
+
+    fn bump_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
+    }
+}
+
+#[cfg(all(test, feature = "factory-integration"))]
+mod test;

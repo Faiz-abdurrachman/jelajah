@@ -9,20 +9,24 @@ test.describe("Hunt Create Flow", () => {
     await expect(page.getByText("Type")).toBeVisible();
   });
 
-  test("hunt types are selectable", async ({ page }) => {
+  test("GPS is selectable while unfinished hunt types are disabled", async ({ page }) => {
     await page.goto("/hunt/create");
 
-    await expect(page.getByText("GPS Hunt", { exact: false })).toBeVisible();
-    await expect(page.getByText("Quest", { exact: false })).toBeVisible();
-    await expect(page.getByText("Race", { exact: false })).toBeVisible();
-    await expect(page.getByText("Puzzle", { exact: false })).toBeVisible();
+    const gps = page.getByRole("button", { name: /GPS Hunt/ });
+    await expect(gps).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Quest Chain/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Race Hunt/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Puzzle Hunt/ })).toBeDisabled();
+
+    await gps.click();
+    await expect(page.getByRole("button", { name: "Lanjut" })).toBeEnabled();
   });
 
   test("navigation buttons present", async ({ page }) => {
     await page.goto("/hunt/create");
 
     await expect(
-      page.getByRole("button", { name: "Next" })
+      page.getByRole("button", { name: "Lanjut" })
     ).toBeVisible();
   });
 });

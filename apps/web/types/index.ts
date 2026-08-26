@@ -20,7 +20,9 @@ export interface User {
 
 export interface Hunt {
   id: number;
+  huntIdHash?: string;
   contractId: string | null;
+  createTxHash?: string;
   hiderPubkey: string;
   huntType: HuntType;
   clue: string;

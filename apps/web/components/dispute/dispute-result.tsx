@@ -30,13 +30,13 @@ export function DisputeResult({
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
 
-  const totalVotes = voteCounts ? voteCounts.approve + voteCounts.reject : 0;
-  const approvePercent = totalVotes > 0 ? Math.round((voteCounts!.approve / totalVotes) * 100) : 0;
-  const rejectPercent = totalVotes > 0 ? Math.round((voteCounts!.reject / totalVotes) * 100) : 0;
-
+  const vc = voteCounts;
+  const totalVotes = vc ? vc.approve + vc.reject : 0;
+  const approvePercent = totalVotes > 0 && vc ? Math.round((vc.approve / totalVotes) * 100) : 0;
+  const rejectPercent = totalVotes > 0 && vc ? Math.round((vc.reject / totalVotes) * 100) : 0;
   const winner: "approve" | "reject" | null =
-    totalVotes > 0
-      ? voteCounts!.approve >= voteCounts!.reject
+    totalVotes > 0 && vc
+      ? vc.approve >= vc.reject
         ? "approve"
         : "reject"
       : null;

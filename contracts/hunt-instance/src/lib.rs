@@ -1,18 +1,19 @@
 #![no_std]
+
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, xdr::ToXdr, Address, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token::TokenClient,
+    Address, BytesN, Env, MuxedAddress,
 };
 
 mod event;
 
-// ─── Constants ────────────────────────────────────────
-
-/// Timer auto-release setelah hunter submit claim (24 jam dalam detik)
 const CLAIM_TIMER_SECONDS: u64 = 24 * 60 * 60;
+const TTL_THRESHOLD_LEDGERS: u32 = 100_000;
+const TTL_EXTEND_TO_LEDGERS: u32 = 2_000_000;
+const GPS_SCALE: i64 = 10_000_000;
+const METERS_PER_DEGREE: i64 = 111_320;
 
-// ─── Error Codes ──────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[contracterror]
 pub enum ContractError {
     NotAuthorized = 1,
@@ -20,70 +21,76 @@ pub enum ContractError {
     HuntExpired = 3,
     AlreadyClaimed = 4,
     TimerNotExpired = 5,
-    InvalidVote = 6,
-    AlreadyVoted = 7,
-    InsufficientStake = 8,
-    DuplicateClaim = 9,
-    InvalidStep = 10,
-    NotActive = 11,
-    NoDeadline = 12,
-    NoRadius = 13,
-    NoGpsCoord = 14,
-    NoClaimer = 15,
-    NoAmount = 16,
-    NoHider = 17,
-    NoClaimTimer = 18,
-    NoVotes = 19,
-    NotEnoughVotes = 20,
+    NotActive = 6,
+    NoClaimPending = 7,
+    InvalidAmount = 8,
+    InvalidDeadline = 9,
+    InvalidRadius = 10,
+    InvalidCoordinates = 11,
+    EscrowBalanceMismatch = 12,
+    SelfClaim = 13,
 }
 
-// ─── Status ───────────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum HuntStatus {
     Active,
+    ClaimPending,
     Claimed,
     Expired,
     Disputed,
 }
 
-// ─── Storage ──────────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[contracttype]
-pub enum DataKey {
+pub struct HuntDetails {
+    pub hunt_id: BytesN<32>,
+    pub hider: Address,
+    pub asset: Address,
+    pub amount: i128,
+    pub gps_lat: i64,
+    pub gps_lng: i64,
+    pub radius: u32,
+    pub deadline: u64,
+    pub clue_hash: BytesN<32>,
+    pub hunt_type: u32,
+    pub status: HuntStatus,
+    pub claimer: Option<Address>,
+    pub claim_timer: Option<u64>,
+    pub claim_photo_hash: Option<BytesN<32>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[contracttype]
+enum DataKey {
+    HuntId,
     Hider,
+    Asset,
     Amount,
     Status,
     Claimer,
     Deadline,
     ClueHash,
     ClaimTimer,
-    ClaimPhotoCid,
+    ClaimPhotoHash,
     GpsLat,
     GpsLng,
     Radius,
     HuntType,
-    Verifiers,
-    Votes,
-    VoteHashes,
-    DisputeReason,
-    DisputeResolution,
+    RejectedHunter(Address),
 }
-
-// ─── Contract ─────────────────────────────────────────
 
 #[contract]
 pub struct HuntInstance;
 
 #[contractimpl]
 impl HuntInstance {
-    // ── Init ──────────────────────────────────────────
-
+    #[allow(clippy::too_many_arguments)]
     pub fn __constructor(
         env: Env,
+        hunt_id: BytesN<32>,
         hider: Address,
+        asset: Address,
         amount: i128,
         gps_lat: i64,
         gps_lng: i64,
@@ -92,7 +99,11 @@ impl HuntInstance {
         clue_hash: BytesN<32>,
         hunt_type: u32,
     ) {
+        Self::validate_hunt(&env, amount, gps_lat, gps_lng, radius, deadline);
+
+        env.storage().instance().set(&DataKey::HuntId, &hunt_id);
         env.storage().instance().set(&DataKey::Hider, &hider);
+        env.storage().instance().set(&DataKey::Asset, &asset);
         env.storage().instance().set(&DataKey::Amount, &amount);
         env.storage().instance().set(&DataKey::GpsLat, &gps_lat);
         env.storage().instance().set(&DataKey::GpsLng, &gps_lng);
@@ -100,264 +111,328 @@ impl HuntInstance {
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage().instance().set(&DataKey::ClueHash, &clue_hash);
         env.storage().instance().set(&DataKey::HuntType, &hunt_type);
-        env.storage().instance().set(&DataKey::Status, &HuntStatus::Active);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &HuntStatus::Active);
+        Self::bump_ttl(&env);
     }
-
-    // ── Claim ─────────────────────────────────────────
 
     pub fn submit_claim(
         env: Env,
         hunter: Address,
-        photo_cid: BytesN<32>,
+        photo_hash: BytesN<32>,
         claim_gps_lat: i64,
         claim_gps_lng: i64,
     ) {
         hunter.require_auth();
+        Self::bump_ttl(&env);
+        Self::require_status(&env, HuntStatus::Active, ContractError::NotActive);
 
-        let status: HuntStatus = env.storage().instance()
-            .get(&DataKey::Status)
-            .unwrap_or(HuntStatus::Expired);
-        if status != HuntStatus::Active {
-            panic_with_error!(&env, ContractError::NotActive);
+        let hider: Address = Self::get_required(&env, &DataKey::Hider);
+        if hunter == hider {
+            panic_with_error!(&env, ContractError::SelfClaim);
+        }
+        if env
+            .storage()
+            .instance()
+            .has(&DataKey::RejectedHunter(hunter.clone()))
+        {
+            panic_with_error!(&env, ContractError::AlreadyClaimed);
         }
 
-        let deadline: u64 = env.storage().instance()
-            .get(&DataKey::Deadline)
-            .unwrap_or(0);
-        if deadline == 0 {
-            panic_with_error!(&env, ContractError::NoDeadline);
-        }
+        let deadline: u64 = Self::get_required(&env, &DataKey::Deadline);
         if env.ledger().timestamp() > deadline {
-            env.storage().instance().set(&DataKey::Status, &HuntStatus::Expired);
             panic_with_error!(&env, ContractError::HuntExpired);
         }
 
-        let radius: u32 = env.storage().instance()
-            .get(&DataKey::Radius)
-            .unwrap_or(0);
-        let hunt_lat: i64 = env.storage().instance()
-            .get(&DataKey::GpsLat)
-            .unwrap_or(0);
-        let hunt_lng: i64 = env.storage().instance()
-            .get(&DataKey::GpsLng)
-            .unwrap_or(0);
-
-        if radius == 0 {
-            panic_with_error!(&env, ContractError::NoRadius);
-        }
-
-        let distance = Self::calculate_distance(claim_gps_lat, claim_gps_lng, hunt_lat, hunt_lng);
-        if distance > radius as i64 {
+        Self::validate_coordinates(&env, claim_gps_lat, claim_gps_lng);
+        let hunt_lat: i64 = Self::get_required(&env, &DataKey::GpsLat);
+        let hunt_lng: i64 = Self::get_required(&env, &DataKey::GpsLng);
+        let radius: u32 = Self::get_required(&env, &DataKey::Radius);
+        let distance = Self::calculate_distance(
+            claim_gps_lat,
+            claim_gps_lng,
+            hunt_lat,
+            hunt_lng,
+        );
+        if distance > i64::from(radius) {
             panic_with_error!(&env, ContractError::NotInRadius);
         }
 
+        let timestamp = env.ledger().timestamp();
         env.storage().instance().set(&DataKey::Claimer, &hunter);
-        env.storage().instance().set(&DataKey::ClaimPhotoCid, &photo_cid);
-        env.storage().instance().set(&DataKey::ClaimTimer, &env.ledger().timestamp());
+        env.storage()
+            .instance()
+            .set(&DataKey::ClaimPhotoHash, &photo_hash);
+        env.storage()
+            .instance()
+            .set(&DataKey::ClaimTimer, &timestamp);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &HuntStatus::ClaimPending);
 
-        event::hunt_claimed(&env, hunter, env.ledger().timestamp());
+        let hunt_id: BytesN<32> = Self::get_required(&env, &DataKey::HuntId);
+        event::claim_submitted(&env, hunt_id, hunter, photo_hash, timestamp);
     }
-
-    // ── Verification ──────────────────────────────────
 
     pub fn approve(env: Env, hider: Address) {
         hider.require_auth();
+        Self::bump_ttl(&env);
         Self::require_hider(&env, &hider);
+        Self::require_status(
+            &env,
+            HuntStatus::ClaimPending,
+            ContractError::NoClaimPending,
+        );
 
-        let claimer: Address = env.storage().instance()
-            .get(&DataKey::Claimer)
-            .expect("no claimer");
-        let amount: i128 = env.storage().instance()
-            .get(&DataKey::Amount)
-            .expect("no amount");
-
-        env.storage().instance().set(&DataKey::Status, &HuntStatus::Claimed);
-        event::hunt_approved(&env, claimer, amount);
+        let hunter: Address = Self::get_required(&env, &DataKey::Claimer);
+        Self::pay_reward(&env, hunter, false);
     }
 
-    pub fn reject(env: Env, hider: Address, reason: BytesN<32>) {
+    pub fn reject(env: Env, hider: Address, reason_hash: BytesN<32>) {
         hider.require_auth();
+        Self::bump_ttl(&env);
         Self::require_hider(&env, &hider);
+        Self::require_status(
+            &env,
+            HuntStatus::ClaimPending,
+            ContractError::NoClaimPending,
+        );
 
-        env.storage().instance().set(&DataKey::Status, &HuntStatus::Disputed);
-        env.storage().instance().set(&DataKey::DisputeReason, &reason);
+        let hunter: Address = Self::get_required(&env, &DataKey::Claimer);
+        env.storage().instance().set(
+            &DataKey::RejectedHunter(hunter.clone()),
+            &true,
+        );
+        env.storage().instance().remove(&DataKey::Claimer);
+        env.storage().instance().remove(&DataKey::ClaimPhotoHash);
+        env.storage().instance().remove(&DataKey::ClaimTimer);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &HuntStatus::Active);
 
-        event::hunt_rejected(&env, reason);
+        let hunt_id: BytesN<32> = Self::get_required(&env, &DataKey::HuntId);
+        event::claim_rejected(&env, hunt_id, hunter, reason_hash);
     }
 
     pub fn auto_release(env: Env) {
-        let claim_timer: u64 = env.storage().instance()
-            .get(&DataKey::ClaimTimer)
-            .unwrap_or(0);
-        if claim_timer == 0 {
-            panic_with_error!(&env, ContractError::NoClaimTimer);
-        }
+        Self::bump_ttl(&env);
+        Self::require_status(
+            &env,
+            HuntStatus::ClaimPending,
+            ContractError::NoClaimPending,
+        );
 
-        let deadline = claim_timer + CLAIM_TIMER_SECONDS;
-        if env.ledger().timestamp() < deadline {
+        let claim_timer: u64 = Self::get_required(&env, &DataKey::ClaimTimer);
+        if env.ledger().timestamp() < claim_timer.saturating_add(CLAIM_TIMER_SECONDS) {
             panic_with_error!(&env, ContractError::TimerNotExpired);
         }
 
-        let claimer: Address = env.storage().instance()
-            .get(&DataKey::Claimer)
-            .expect("no claimer");
-        let amount: i128 = env.storage().instance()
-            .get(&DataKey::Amount)
-            .expect("no amount");
-
-        env.storage().instance().set(&DataKey::Status, &HuntStatus::Claimed);
-        event::hunt_approved(&env, claimer, amount);
+        let hunter: Address = Self::get_required(&env, &DataKey::Claimer);
+        Self::pay_reward(&env, hunter, true);
     }
-
-    // ── Dispute Voting ────────────────────────────────
-
-    pub fn commit_vote(env: Env, verifier: Address, vote_hash: BytesN<32>) {
-        verifier.require_auth();
-
-        let status: HuntStatus = env.storage().instance()
-            .get(&DataKey::Status)
-            .unwrap_or(HuntStatus::Expired);
-        if status != HuntStatus::Disputed {
-            panic_with_error!(&env, ContractError::NotActive);
-        }
-
-        let mut vote_hashes: Vec<(Address, BytesN<32>)> = env.storage().instance()
-            .get(&DataKey::VoteHashes)
-            .unwrap_or(Vec::new(&env));
-        vote_hashes.push_back((verifier.clone(), vote_hash));
-        env.storage().instance().set(&DataKey::VoteHashes, &vote_hashes);
-    }
-
-    pub fn reveal_vote(env: Env, verifier: Address, vote: bool, salt: BytesN<32>) {
-        verifier.require_auth();
-
-        let vote_hashes: Vec<(Address, BytesN<32>)> = env.storage().instance()
-            .get(&DataKey::VoteHashes)
-            .unwrap_or(Vec::new(&env));
-
-        let computed_hash: BytesN<32> = env.crypto().sha256(&(verifier.clone(), vote, salt).to_xdr(&env)).into();
-        let found = vote_hashes.iter().any(|(addr, hash)| {
-            addr == verifier && hash == computed_hash
-        });
-        if !found {
-            panic_with_error!(&env, ContractError::InvalidVote);
-        }
-
-        let mut votes: Vec<(Address, bool)> = env.storage().instance()
-            .get(&DataKey::Votes)
-            .unwrap_or(Vec::new(&env));
-        votes.push_back((verifier.clone(), vote));
-        env.storage().instance().set(&DataKey::Votes, &votes);
-    }
-
-    pub fn resolve_dispute(env: Env) {
-        let votes: Vec<(Address, bool)> = env.storage().instance()
-            .get(&DataKey::Votes)
-            .unwrap_or(Vec::new(&env));
-
-        if votes.is_empty() {
-            panic_with_error!(&env, ContractError::NoVotes);
-        }
-
-        let approve_count = votes.iter().filter(|(_, v)| *v).count() as u32;
-        let reject_count = votes.len() - approve_count;
-
-        if approve_count >= 2 {
-            env.storage().instance().set(&DataKey::Status, &HuntStatus::Claimed);
-            env.storage().instance().set(&DataKey::DisputeResolution, &BytesN::from_array(&env, &[1u8; 32]));
-        } else if reject_count >= 2 {
-            env.storage().instance().set(&DataKey::Status, &HuntStatus::Active);
-            env.storage().instance().set(&DataKey::DisputeResolution, &BytesN::from_array(&env, &[0u8; 32]));
-        } else {
-            panic_with_error!(&env, ContractError::NotEnoughVotes);
-        }
-
-        let hunter_wins = approve_count >= 2;
-        event::dispute_resolved(&env, hunter_wins);
-    }
-
-    // ── Expiry ────────────────────────────────────────
 
     pub fn claim_expired(env: Env) {
-        let status: HuntStatus = env.storage().instance()
-            .get(&DataKey::Status)
-            .unwrap_or(HuntStatus::Expired);
-        if status != HuntStatus::Active {
-            panic_with_error!(&env, ContractError::NotActive);
-        }
+        Self::bump_ttl(&env);
+        Self::require_status(&env, HuntStatus::Active, ContractError::NotActive);
 
-        let deadline: u64 = env.storage().instance()
-            .get(&DataKey::Deadline)
-            .unwrap_or(0);
-        if deadline == 0 {
-            panic_with_error!(&env, ContractError::NoDeadline);
-        }
+        let deadline: u64 = Self::get_required(&env, &DataKey::Deadline);
         if env.ledger().timestamp() < deadline {
-            panic_with_error!(&env, ContractError::HuntExpired);
+            panic_with_error!(&env, ContractError::InvalidDeadline);
         }
 
-        env.storage().instance().set(&DataKey::Status, &HuntStatus::Expired);
+        let hider: Address = Self::get_required(&env, &DataKey::Hider);
+        let amount: i128 = Self::get_required(&env, &DataKey::Amount);
+        Self::require_escrow_balance(&env, amount);
 
-        let hider: Address = env.storage().instance()
-            .get(&DataKey::Hider)
-            .expect("no hider");
-        let amount: i128 = env.storage().instance()
-            .get(&DataKey::Amount)
-            .expect("no amount");
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &HuntStatus::Expired);
+        Self::transfer_from_escrow(&env, &hider, amount);
 
-        event::hunt_expired(&env, hider, amount);
+        let hunt_id: BytesN<32> = Self::get_required(&env, &DataKey::HuntId);
+        event::reward_refunded(&env, hunt_id, hider, amount);
     }
 
-    // ── Getters ───────────────────────────────────────
+    pub fn get_hunt(env: Env) -> HuntDetails {
+        Self::bump_ttl(&env);
+        HuntDetails {
+            hunt_id: Self::get_required(&env, &DataKey::HuntId),
+            hider: Self::get_required(&env, &DataKey::Hider),
+            asset: Self::get_required(&env, &DataKey::Asset),
+            amount: Self::get_required(&env, &DataKey::Amount),
+            gps_lat: Self::get_required(&env, &DataKey::GpsLat),
+            gps_lng: Self::get_required(&env, &DataKey::GpsLng),
+            radius: Self::get_required(&env, &DataKey::Radius),
+            deadline: Self::get_required(&env, &DataKey::Deadline),
+            clue_hash: Self::get_required(&env, &DataKey::ClueHash),
+            hunt_type: Self::get_required(&env, &DataKey::HuntType),
+            status: Self::get_required(&env, &DataKey::Status),
+            claimer: env.storage().instance().get(&DataKey::Claimer),
+            claim_timer: env.storage().instance().get(&DataKey::ClaimTimer),
+            claim_photo_hash: env.storage().instance().get(&DataKey::ClaimPhotoHash),
+        }
+    }
 
     pub fn get_status(env: Env) -> HuntStatus {
-        env.storage().instance()
-            .get(&DataKey::Status)
-            .unwrap_or(HuntStatus::Expired)
+        Self::bump_ttl(&env);
+        Self::get_required(&env, &DataKey::Status)
     }
 
     pub fn get_hunter(env: Env) -> Option<Address> {
+        Self::bump_ttl(&env);
         env.storage().instance().get(&DataKey::Claimer)
     }
 
-    pub fn get_hider(env: Env) -> Option<Address> {
-        env.storage().instance().get(&DataKey::Hider)
+    pub fn get_hider(env: Env) -> Address {
+        Self::bump_ttl(&env);
+        Self::get_required(&env, &DataKey::Hider)
+    }
+
+    pub fn get_escrow_balance(env: Env) -> i128 {
+        Self::bump_ttl(&env);
+        let asset: Address = Self::get_required(&env, &DataKey::Asset);
+        TokenClient::new(&env, &asset).balance(&env.current_contract_address())
     }
 
     pub fn get_timer_remaining(env: Env) -> u64 {
-        let claim_timer: u64 = env.storage().instance()
-            .get(&DataKey::ClaimTimer)
-            .unwrap_or(0);
-        let deadline = claim_timer + CLAIM_TIMER_SECONDS;
-        if env.ledger().timestamp() >= deadline {
-            0
-        } else {
-            deadline - env.ledger().timestamp()
+        Self::bump_ttl(&env);
+        let claim_timer: Option<u64> = env.storage().instance().get(&DataKey::ClaimTimer);
+        match claim_timer {
+            Some(started_at) => started_at
+                .saturating_add(CLAIM_TIMER_SECONDS)
+                .saturating_sub(env.ledger().timestamp()),
+            None => 0,
         }
     }
 
-    // ── Helpers ───────────────────────────────────────
+    fn pay_reward(env: &Env, hunter: Address, automatic: bool) {
+        let amount: i128 = Self::get_required(env, &DataKey::Amount);
+        Self::require_escrow_balance(env, amount);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &HuntStatus::Claimed);
+        Self::transfer_from_escrow(env, &hunter, amount);
+
+        let hunt_id: BytesN<32> = Self::get_required(env, &DataKey::HuntId);
+        event::reward_paid(env, hunt_id, hunter, amount, automatic);
+    }
+
+    fn transfer_from_escrow(env: &Env, recipient: &Address, amount: i128) {
+        let asset: Address = Self::get_required(env, &DataKey::Asset);
+        let destination = MuxedAddress::from(recipient);
+        TokenClient::new(env, &asset).transfer(
+            &env.current_contract_address(),
+            &destination,
+            &amount,
+        );
+    }
+
+    fn require_escrow_balance(env: &Env, amount: i128) {
+        let asset: Address = Self::get_required(env, &DataKey::Asset);
+        let balance = TokenClient::new(env, &asset).balance(&env.current_contract_address());
+        if balance < amount {
+            panic_with_error!(env, ContractError::EscrowBalanceMismatch);
+        }
+    }
 
     fn require_hider(env: &Env, hider: &Address) {
-        let stored_hider: Address = env.storage().instance()
-            .get(&DataKey::Hider)
-            .expect("no hider");
+        let stored_hider: Address = Self::get_required(env, &DataKey::Hider);
         if hider != &stored_hider {
             panic_with_error!(env, ContractError::NotAuthorized);
         }
     }
 
+    fn require_status(env: &Env, expected: HuntStatus, error: ContractError) {
+        let status: HuntStatus = Self::get_required(env, &DataKey::Status);
+        if status != expected {
+            panic_with_error!(env, error);
+        }
+    }
+
+    fn validate_hunt(
+        env: &Env,
+        amount: i128,
+        gps_lat: i64,
+        gps_lng: i64,
+        radius: u32,
+        deadline: u64,
+    ) {
+        if amount <= 0 {
+            panic_with_error!(env, ContractError::InvalidAmount);
+        }
+        if deadline <= env.ledger().timestamp() {
+            panic_with_error!(env, ContractError::InvalidDeadline);
+        }
+        if radius == 0 {
+            panic_with_error!(env, ContractError::InvalidRadius);
+        }
+        Self::validate_coordinates(env, gps_lat, gps_lng);
+    }
+
+    fn validate_coordinates(env: &Env, gps_lat: i64, gps_lng: i64) {
+        let max_lat = 90 * GPS_SCALE;
+        let max_lng = 180 * GPS_SCALE;
+        if !(-max_lat..=max_lat).contains(&gps_lat)
+            || !(-max_lng..=max_lng).contains(&gps_lng)
+        {
+            panic_with_error!(env, ContractError::InvalidCoordinates);
+        }
+    }
+
     fn calculate_distance(lat1: i64, lng1: i64, lat2: i64, lng2: i64) -> i64 {
-        let lat_diff = (lat1 - lat2).abs();
-        let lng_diff = (lng1 - lng2).abs();
-        let lat_m = lat_diff * 111_320 / 10_000_000;
-        let lng_m = lng_diff * 111_320 / 10_000_000;
+        let lat_diff = i128::from((lat1 - lat2).abs());
+        let lng_diff = i128::from((lng1 - lng2).abs());
+        let gps_scale = i128::from(GPS_SCALE);
+        let meters_per_degree = i128::from(METERS_PER_DEGREE);
+        let lat_m = lat_diff * meters_per_degree / gps_scale;
+
+        let mean_abs_lat = ((lat1 + lat2) / 2).abs().min(90 * GPS_SCALE);
+        let longitude_factor = i128::from(longitude_scale(mean_abs_lat));
+        let lng_m = lng_diff * meters_per_degree * longitude_factor / gps_scale / gps_scale;
+
         integer_sqrt(lat_m * lat_m + lng_m * lng_m)
+    }
+
+    fn get_required<T>(env: &Env, key: &DataKey) -> T
+    where
+        T: soroban_sdk::TryFromVal<Env, soroban_sdk::Val>,
+    {
+        env.storage()
+            .instance()
+            .get(key)
+            .unwrap_or_else(|| panic_with_error!(env, ContractError::NotActive))
+    }
+
+    fn bump_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
     }
 }
 
-/// Integer square root (Babylonian method) — works in no_std without libm
-fn integer_sqrt(n: i64) -> i64 {
+/// Integer cosine approximation for latitude in the range 0..=90 degrees.
+/// Uses Bhaskara I via cos(lat) = sin(90° - lat), returning a 1e7 scale.
+fn longitude_scale(abs_lat: i64) -> i64 {
+    const DEGREE_MILLIS: i64 = 1_000;
+    const HALF_TURN_MILLIS: i64 = 180 * DEGREE_MILLIS;
+    const QUARTER_TURN_MILLIS: i64 = 90 * DEGREE_MILLIS;
+    const BHASKARA_DENOMINATOR: i64 = 40_500 * DEGREE_MILLIS * DEGREE_MILLIS;
+
+    let latitude_millis = (abs_lat / 10_000).min(QUARTER_TURN_MILLIS);
+    let complementary_angle = QUARTER_TURN_MILLIS - latitude_millis;
+    let product = complementary_angle * (HALF_TURN_MILLIS - complementary_angle);
+    let numerator = 4 * product;
+    let denominator = BHASKARA_DENOMINATOR - product;
+    if denominator == 0 {
+        0
+    } else {
+        numerator * GPS_SCALE / denominator
+    }
+}
+
+fn integer_sqrt(n: i128) -> i64 {
     if n <= 0 {
         return 0;
     }
@@ -367,5 +442,12 @@ fn integer_sqrt(n: i64) -> i64 {
         x = y;
         y = (x + n / x) / 2;
     }
-    x
+    if x > i128::from(i64::MAX) {
+        i64::MAX
+    } else {
+        x as i64
+    }
 }
+
+#[cfg(test)]
+mod test;

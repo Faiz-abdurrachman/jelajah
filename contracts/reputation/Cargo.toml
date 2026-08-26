@@ -10,6 +10,5 @@ doctest = false
 [dependencies]
 soroban-sdk.workspace = true
 
-# testutils butuh soroban-ledger-snapshot yang belum available di 27.0.2
-# Tests akan di-enable ketika dependency tersedia
-
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

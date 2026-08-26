@@ -7,9 +7,13 @@ import { ClaimHuntView } from "@/components/hunt/claim-hunt-view";
 import { HiderApproveView } from "@/components/hunt/hider-approve-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Scale } from "lucide-react";
+import Link from "next/link";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { getHuntById } from "@/lib/supabase/client";
+import { getDisputesByHunt } from "@/lib/supabase/client";
 import type { Hunt } from "@/types";
+import { normalizeHunt } from "@/lib/supabase/normalize";
 
 export default function HuntDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,21 +40,7 @@ export default function HuntDetailPage() {
         if (cancelled) return;
 
         if (row) {
-          setHunt({
-            id: row.id as number,
-            contractId: (row.contract_id as string) ?? null,
-            hiderPubkey: row.hider_pubkey as string,
-            huntType: row.hunt_type as Hunt["huntType"],
-            clue: row.clue as string,
-            latitude: row.latitude as number,
-            longitude: row.longitude as number,
-            radiusMeters: (row.radius_meters as number) ?? 50,
-            amountStroops: (row.amount_stroops as number) ?? null,
-            deadline: row.deadline as string,
-            status: row.status as Hunt["status"],
-            photoCid: (row.photo_cid as string) ?? null,
-            createdAt: row.created_at as string,
-          });
+          setHunt(normalizeHunt(row as Record<string, unknown>));
         } else {
           setError("Hunt tidak ditemukan.");
         }
@@ -74,21 +64,7 @@ export default function HuntDetailPage() {
     getHuntById(huntId)
       .then((row) => {
         if (row) {
-          setHunt({
-            id: row.id as number,
-            contractId: (row.contract_id as string) ?? null,
-            hiderPubkey: row.hider_pubkey as string,
-            huntType: row.hunt_type as Hunt["huntType"],
-            clue: row.clue as string,
-            latitude: row.latitude as number,
-            longitude: row.longitude as number,
-            radiusMeters: (row.radius_meters as number) ?? 50,
-            amountStroops: (row.amount_stroops as number) ?? null,
-            deadline: row.deadline as string,
-            status: row.status as Hunt["status"],
-            photoCid: (row.photo_cid as string) ?? null,
-            createdAt: row.created_at as string,
-          });
+          setHunt(normalizeHunt(row as Record<string, unknown>));
         }
       })
       .finally(() => setLoading(false));
@@ -116,7 +92,15 @@ export default function HuntDetailPage() {
             {isHider && (
               <HiderApproveView hunt={hunt} onClaimResolved={handleClaimResolved} />
             )}
-            {!isHider && <ClaimHuntView hunt={hunt} />}
+            {!isHider && hunt.status === "active" && <ClaimHuntView hunt={hunt} />}
+            {!isHider && hunt.status !== "active" && (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  Hunt ini sedang {hunt.status.replace("_", " ")} dan tidak menerima claim baru.
+                </CardContent>
+              </Card>
+            )}
+            <HuntDisputes huntId={hunt.id} />
           </div>
         ) : null}
       </div>
@@ -135,7 +119,7 @@ function HuntInfoCard({ hunt }: { hunt: Hunt }) {
               &ldquo;{hunt.clue}&rdquo;
             </p>
           </div>
-          <Badge variant={hunt.status === "Active" ? "default" : "secondary"}>
+          <Badge variant={hunt.status === "active" ? "default" : "secondary"}>
             {hunt.status}
           </Badge>
         </div>
@@ -156,6 +140,57 @@ function HuntInfoCard({ hunt }: { hunt: Hunt }) {
               {new Date(hunt.deadline).toLocaleDateString("id-ID")}
             </span>
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HuntDisputes({ huntId }: { huntId: number }) {
+  const [disputes, setDisputes] = useState<Array<{ id: number; claim_id: number; reason: string; status: string; created_at: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getDisputesByHunt(huntId).then((data) => {
+      if (!cancelled && data) {
+        setDisputes(data as Array<{ id: number; claim_id: number; reason: string; status: string; created_at: string }>);
+      }
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [huntId]);
+
+  if (loading) return null;
+  if (disputes.length === 0) return null;
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Scale className="size-5 text-amber-500" />
+          <h3 className="font-semibold">Disputes ({disputes.length})</h3>
+        </div>
+        <div className="space-y-2">
+          {disputes.map((d) => (
+            <Link
+              key={d.id}
+              href={`/dispute/${d.id}`}
+              className="flex items-center justify-between rounded-md border p-3 hover:border-primary/50 transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Dispute #{d.id}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {d.reason}
+                </p>
+              </div>
+              <Badge
+                variant={d.status === "voting" ? "default" : "secondary"}
+              >
+                {d.status}
+              </Badge>
+            </Link>
+          ))}
         </div>
       </CardContent>
     </Card>
