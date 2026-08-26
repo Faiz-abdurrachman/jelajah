@@ -8,7 +8,6 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-000000?logo=stellar)](https://stellar.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase)](https://supabase.com/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
 
@@ -47,7 +46,7 @@
 ## 🧪 E2E Tests
 
 ```
-Running 13 tests using 4 workers
+Running 18 tests using 4 workers
   ✅ Landing Page — page loads with title and CTA
   ✅ Landing Page — how it works section renders
   ✅ Landing Page — Lihat Peta button navigates to map
@@ -61,8 +60,13 @@ Running 13 tests using 4 workers
 
   ✅ Wallet API — challenge HttpOnly dan validasi address
   ✅ Wallet API — mutation tanpa session ditolak
+  ✅ XLM Payment — valid native payment input
+  ✅ XLM Payment — invalid destination dan amount ditolak
+  ✅ XLM Payment — memo byte limit
+  ✅ XLM Payment — form dilindungi wallet connection
+  ✅ XLM Payment — Horizon failure menjadi feedback actionable
 
-  13 passed
+  18 passed
 ```
 
 Run: `npm run test:e2e`
@@ -105,6 +109,20 @@ CREATE → HIDE → HUNT → CLAIM → REPEAT
 | **HIDE** | Smart Contract | Native XLM dipindahkan atomik ke escrow contract per hunt |
 | **HUNT** | Hunter | Lihat map, baca clue, navigasi ke lokasi |
 | **CLAIM** | Hunter | GPS verified → upload foto bukti → hider approve / auto cair 24 jam |
+
+## 🥋 Level 1 Submission Evidence
+
+Halaman Wallet menyediakan connect/disconnect, XLM balance dari Horizon, serta classic native XLM payment yang ditandatangani Freighter. Hasil transaksi menampilkan status sukses/gagal, full transaction hash, dan link Stellar Expert Testnet.
+
+| Wallet connected | XLM balance |
+|---|---|
+| ![Wallet connected](./public/screenshots/level-1/wallet-connected.png) | ![XLM balance](./public/screenshots/level-1/xlm-balance.png) |
+
+| Payment success | Stellar Expert result |
+|---|---|
+| ![Payment success](./public/screenshots/level-1/payment-success.png) | ![Transaction result](./public/screenshots/level-1/transaction-result.png) |
+
+Verified Testnet transaction: [`f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029e7890dce6c4684a0`](https://stellar.expert/explorer/testnet/tx/f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029e7890dce6c4684a0). Native payment `1.0000000 XLM`, memo `JELAJAH Level 1`, status successful pada ledger `4351946`.
 
 ---
 
@@ -318,7 +336,7 @@ jelajah/
 | Landing page + Connect Wallet | ✅ |
 | Map (read-only, Mapbox fallback) | ✅ |
 | Profile (public key, balance, badges) | ✅ |
-| Wallet (balance XLM/USDC, tx history) | ✅ |
+| Wallet (connect/disconnect, balance, send XLM, tx history) | ✅ |
 
 ### Level 2 — Yellow Belt (✅)
 | Fitur | Status |
@@ -344,23 +362,17 @@ Semua dokumentasi ada di folder `docs/`:
 
 | File | Description |
 |---|---|
-| [01-prd.md](docs/01-prd.md) | Product Requirement Document |
-| [02-game-rules.md](docs/02-game-rules.md) | Aturan main game |
-| [03-technical-architecture.md](docs/03-technical-architecture.md) | Arsitektur teknis |
-| [04-smart-contract-spec.md](docs/04-smart-contract-spec.md) | Spesifikasi smart contract |
-| [05-user-flow-screens.md](docs/05-user-flow-screens.md) | User flow & screens |
-| [06-economics.md](docs/06-economics.md) | Ekonomi & revenue |
-| [07-belt-submission-guide.md](docs/07-belt-submission-guide.md) | Panduan submission belt |
-| [08-scale-architecture.md](docs/08-scale-architecture.md) | Arsitektur skalabilitas |
+| [01-prd.md](../../docs/01-prd.md) | Product Requirement Document |
+| [02-game-rules.md](../../docs/02-game-rules.md) | Aturan main game |
+| [03-technical-architecture.md](../../docs/03-technical-architecture.md) | Arsitektur teknis |
+| [04-smart-contract-spec.md](../../docs/04-smart-contract-spec.md) | Spesifikasi smart contract |
+| [05-user-flow-screens.md](../../docs/05-user-flow-screens.md) | User flow & screens |
+| [06-economics.md](../../docs/06-economics.md) | Ekonomi & revenue |
+| [07-belt-submission-guide.md](../../docs/07-belt-submission-guide.md) | Panduan submission belt |
+| [08-scale-architecture.md](../../docs/08-scale-architecture.md) | Arsitektur skalabilitas |
 
 ---
 
 ## 🤝 Kontribusi
 
 Project ini dikerjakan oleh **Faiz Abdurrachman** untuk Stellar Belt Challenge.
-
----
-
-## 📜 Lisensi
-
-MIT

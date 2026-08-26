@@ -4,6 +4,7 @@ import { RequireLevel } from "@/components/feature-gate";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { XlmSendForm } from "@/components/wallet/xlm-send-form";
 import { Wallet, RefreshCw, ExternalLink } from "lucide-react";
 
 export default function WalletPage() {
@@ -81,14 +82,19 @@ export default function WalletPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
-                <code className="text-sm font-mono">
+                <code className="min-w-0 break-all text-sm font-mono sm:hidden">
                   {truncateKey(publicKey ?? "")}
+                </code>
+                <code className="hidden min-w-0 break-all text-sm font-mono sm:block">
+                  {publicKey}
                 </code>
                 <Button variant="outline" size="sm" onClick={disconnect}>
                   Disconnect
                 </Button>
               </CardContent>
             </Card>
+
+            <XlmSendForm />
 
             {/* Transaction History */}
             <Card>

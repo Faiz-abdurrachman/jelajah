@@ -11,12 +11,13 @@ import {
 } from "react";
 import {
   getAddress,
+  getNetwork,
   requestAccess,
   signMessage,
   signTransaction,
 } from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
-import { STELLAR_CONFIG } from "@/config/constants";
+import { NETWORKS, STELLAR_CONFIG } from "@/config/constants";
 import { submitSignedTx, getNetworkPassphrase } from "@/lib/stellar/soroban";
 import type { WalletBalance, Transaction } from "@/types";
 
@@ -33,6 +34,11 @@ interface WalletContextValue {
   disconnect: () => void;
   refreshBalance: () => Promise<void>;
   refreshTransactions: () => Promise<void>;
+  signTransactionXdr: (xdr: string) => Promise<{
+    signedXdr: string;
+    success: boolean;
+    error?: string;
+  }>;
   signAndSubmit: (xdr: string) => Promise<{ hash: string; success: boolean; error?: string }>;
 }
 
@@ -81,6 +87,19 @@ async function authenticateWallet(address: string): Promise<void> {
   }
 }
 
+async function assertFreighterNetwork(): Promise<void> {
+  if (getNetworkPassphrase() !== NETWORKS.testnet.passphrase) {
+    throw new Error("JELAJAH Level 1 harus dikonfigurasi untuk Stellar Testnet");
+  }
+  const configured = await getNetwork();
+  if (configured.error) {
+    throw new Error("Gagal membaca network Freighter");
+  }
+  if (configured.networkPassphrase !== NETWORKS.testnet.passphrase) {
+    throw new Error("Ubah network Freighter ke Stellar Testnet lalu coba lagi");
+  }
+}
+
 // ─── Provider ─────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -101,6 +120,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (address && sessionResponse.ok) {
           const session = (await sessionResponse.json()) as { address?: string };
           if (session.address !== address) return;
+          await assertFreighterNetwork();
           setPublicKey(address);
         }
       } catch {
@@ -126,6 +146,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
         resolvedAddress = addr;
       }
+      await assertFreighterNetwork();
       await authenticateWallet(resolvedAddress);
       setPublicKey(resolvedAddress);
     } catch (err) {
@@ -259,25 +280,45 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [publicKey]);
 
-  const signAndSubmit = useCallback(
-    async (xdr: string): Promise<{ hash: string; success: boolean; error?: string }> => {
+  const signTransactionXdr = useCallback(
+    async (xdr: string): Promise<{
+      signedXdr: string;
+      success: boolean;
+      error?: string;
+    }> => {
       if (!publicKey) {
-        return { hash: "", success: false, error: "Wallet not connected" };
+        return { signedXdr: "", success: false, error: "Wallet not connected" };
       }
 
-      const { signedTxXdr, error: signError } = await signTransaction(xdr, {
+      const { signedTxXdr, signerAddress, error: signError } = await signTransaction(xdr, {
         networkPassphrase: getNetworkPassphrase(),
         address: publicKey,
       });
 
-      if (signError || !signedTxXdr) {
-        return { hash: "", success: false, error: signError ?? "User rejected signing" };
+      if (signError || !signedTxXdr || signerAddress !== publicKey) {
+        return {
+          signedXdr: "",
+          success: false,
+          error: signError ?? "User rejected signing or selected a different account",
+        };
       }
 
-      const result = await submitSignedTx(signedTxXdr);
-      return result;
+      return { signedXdr: signedTxXdr, success: true };
     },
     [publicKey]
+  );
+
+  const signAndSubmit = useCallback(
+    async (xdr: string): Promise<{ hash: string; success: boolean; error?: string }> => {
+      const signed = await signTransactionXdr(xdr);
+      if (!signed.success || !signed.signedXdr) {
+        return { hash: "", success: false, error: signed.error };
+      }
+
+      const result = await submitSignedTx(signed.signedXdr);
+      return result;
+    },
+    [signTransactionXdr]
   );
 
   return (
@@ -293,6 +334,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         disconnect,
         refreshBalance,
         refreshTransactions,
+        signTransactionXdr,
         signAndSubmit,
       }}
     >

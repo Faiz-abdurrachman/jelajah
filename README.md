@@ -6,7 +6,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7B61FF?logo=stellar)](https://stellar.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase)](https://supabase.com/)
-[![CI](https://img.shields.io/badge/CI-12_contract_%2B_13_E2E_tests-success)](.github/workflows/ci.yml)
+[![CI](https://img.shields.io/badge/CI-12_contract_%2B_18_web_tests-success)](.github/workflows/ci.yml)
 
 JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, wallet Freighter, dan escrow Soroban. Versi yang aktif saat ini adalah **MVP Level 2: GPS Hunt di Stellar Testnet**.
 
@@ -19,6 +19,7 @@ JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, wallet Freighter, dan 
 | Auto-release setelah 24 jam | Terimplementasi dan teruji |
 | Refund hunt kedaluwarsa | Terimplementasi dan teruji |
 | Wallet signed session | Terimplementasi |
+| Native XLM payment dengan Freighter | Terimplementasi |
 | Foto bukti IPFS melalui Pinata | Terimplementasi |
 | Index transaksi terverifikasi ke Supabase | Terimplementasi |
 | Quest, dispute, race, puzzle, dan photo hunt | Roadmap; belum aktif |
@@ -49,6 +50,36 @@ Alur utamanya:
 4. Hunter menandatangani transaksi `submit_claim`.
 5. Hider memilih approve atau reject. Jika tidak merespons selama 24 jam, claim dapat di-auto-release.
 6. Database hanya menjadi index turunan setelah server memverifikasi transaksi final dari Stellar RPC.
+
+## Level 1 Submission
+
+| Requirement | Implementasi | Status |
+|---|---|---|
+| Freighter wallet pada Stellar Testnet | Network diperiksa saat connect/restore | Siap |
+| Connect dan disconnect | Wallet provider + signed session | Siap |
+| Fetch dan tampilkan XLM balance | Horizon account balance pada halaman Wallet | Siap |
+| Kirim native XLM | Classic payment melalui Freighter + Horizon | Siap |
+| Feedback sukses/gagal | Status eksplisit, pesan error, dan loading state | Siap |
+| Transaction result | Full hash dan link Stellar Expert Testnet | Siap |
+| Minimum 10 meaningful commits | Lebih dari 40 commit | Siap |
+| Public repository dan README | Root README tersedia | Siap setelah push |
+
+### Level 1 Evidence
+
+| Wallet connected + balance | Successful payment + transaction result |
+|---|---|
+| ![Freighter connected](apps/web/public/screenshots/level-1/wallet-connected.png) | ![JELAJAH payment success](apps/web/public/screenshots/level-1/payment-success.png) |
+| ![XLM balance](apps/web/public/screenshots/level-1/xlm-balance.png) | ![Stellar Expert transaction result](apps/web/public/screenshots/level-1/transaction-result.png) |
+
+Verified transaction: [`f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029e7890dce6c4684a0`](https://stellar.expert/explorer/testnet/tx/f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029e7890dce6c4684a0)
+
+- Network: Stellar Testnet
+- Operation: native XLM payment
+- Amount: `1.0000000 XLM`
+- Memo: `JELAJAH Level 1`
+- Status: successful, ledger `4351946`
+
+Seluruh screenshot berasal dari wallet dan transaksi Testnet nyata, bukan mock data.
 
 ## Tampilan
 
@@ -170,7 +201,7 @@ npm run build
 npm run test:e2e
 ```
 
-Status terakhir: typecheck, lint, production build, dependency audit, dan **13/13 Playwright E2E** lulus.
+Status terakhir: typecheck, lint, production build, dependency audit, dan **18/18 Playwright tests** lulus.
 
 ### Smart contracts
 
