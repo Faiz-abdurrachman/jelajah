@@ -20,6 +20,16 @@ function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+    if (typeof record.details === "string" && record.details) return record.details;
+  }
+  return "Gagal menyimpan hunt";
+}
+
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
@@ -116,7 +126,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const unauthenticated = error instanceof Error && error.message === "UNAUTHENTICATED";
     return Response.json(
-      { error: unauthenticated ? "Wallet belum terautentikasi" : error instanceof Error ? error.message : "Gagal menyimpan hunt" },
+      { error: unauthenticated ? "Wallet belum terautentikasi" : getErrorMessage(error) },
       { status: unauthenticated ? 401 : 500 }
     );
   }

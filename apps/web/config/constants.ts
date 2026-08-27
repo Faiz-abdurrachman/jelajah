@@ -136,7 +136,7 @@ export const MAP_CONFIG = {
 
 // Error Messages
 export const ERROR_MESSAGES = {
-  walletNotFound: "Wallet tidak ditemukan. Silakan install Freighter atau buka wallet lain.",
+  walletNotFound: "Wallet tidak ditemukan. Install Freighter atau pilih Albedo web wallet.",
   walletRejected: "Koneksi wallet ditolak.",
   insufficientBalance: "Saldo tidak mencukupi.",
   gpsNotInRadius: "Kamu belum berada dalam radius hunt.",

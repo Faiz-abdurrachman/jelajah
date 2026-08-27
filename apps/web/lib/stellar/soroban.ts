@@ -8,8 +8,113 @@ export interface TxResult {
   success: boolean;
   result?: string;
   error?: string;
-  /** Assembled transaction XDR — ready for Freighter signing */
+  /** Assembled transaction XDR — ready for the selected wallet to sign. */
   xdr?: string;
+}
+
+const TRANSACTION_ERROR_MESSAGES: Record<string, string> = {
+  txTooEarly: "Transaksi belum masuk rentang waktu yang valid. Buat ulang lalu coba lagi.",
+  txTooLate: "Transaksi kedaluwarsa sebelum dikirim. Buat ulang lalu setujui wallet lebih cepat.",
+  txMissingOperation: "Transaksi tidak memiliki operasi contract.",
+  txBadSeq: "Sequence akun sudah berubah. Muat ulang halaman lalu coba lagi.",
+  txBadAuth: "Signature wallet tidak valid untuk akun yang terhubung.",
+  txInsufficientBalance: "Saldo XLM tidak cukup untuk reward, reserve, dan biaya transaksi.",
+  txNoAccount: "Akun sumber belum aktif di Stellar Testnet.",
+  txInsufficientFee: "Biaya transaksi tidak cukup. Buat ulang transaksi lalu coba lagi.",
+  txBadAuthExtra: "Transaksi memiliki signature yang tidak diperlukan.",
+  txInternalError: "Stellar mengalami error internal sementara. Coba lagi.",
+  txNotSupported: "Jenis transaksi ini tidak didukung oleh network.",
+  txBadSponsorship: "Konfigurasi sponsorship transaksi tidak valid.",
+  txBadMinSeqAgeOrGap: "Syarat sequence transaksi belum terpenuhi.",
+  txMalformed: "Format transaksi ditolak oleh Stellar.",
+  txSorobanInvalid: "Data atau resource transaksi Soroban tidak lagi valid. Buat ulang lalu coba lagi.",
+  txFrozenKeyAccessed: "Transaksi mencoba mengakses ledger key yang dibekukan.",
+};
+
+const OPERATION_ERROR_MESSAGES: Record<string, string> = {
+  opBadAuth: "Otorisasi operasi ditolak.",
+  opNoAccount: "Akun sumber operasi tidak ditemukan.",
+  opNotSupported: "Operasi contract tidak didukung.",
+  opTooManySubentries: "Akun melewati batas subentry.",
+  opExceededWorkLimit: "Operasi melewati batas kerja network.",
+  opTooManySponsoring: "Operasi melewati batas sponsorship.",
+  invokeHostFunctionMalformed: "Pemanggilan contract tidak valid.",
+  invokeHostFunctionTrapped: "Contract menghentikan eksekusi karena validasi atau error internal.",
+  invokeHostFunctionResourceLimitExceeded: "Resource transaksi contract tidak mencukupi. Buat ulang lalu coba lagi.",
+  invokeHostFunctionEntryArchived: "Data contract telah diarsipkan dan perlu dipulihkan.",
+  invokeHostFunctionInsufficientRefundableFee: "Biaya refundable Soroban tidak mencukupi.",
+};
+
+function diagnosticValueToText(value: unknown): string {
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value instanceof Uint8Array) return Buffer.from(value).toString("hex");
+  if (Array.isArray(value)) return value.map(diagnosticValueToText).filter(Boolean).join(", ");
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value, (_key, nested) =>
+        typeof nested === "bigint" ? nested.toString() : nested
+      );
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function getDiagnosticSummary(events: xdr.DiagnosticEvent[] = []): string | null {
+  for (const diagnostic of [...events].reverse()) {
+    try {
+      const body = diagnostic.event().body().v0();
+      const values = [...body.topics(), body.data()].map((item) => scValToNative(item));
+      const summary = values.map(diagnosticValueToText).filter(Boolean).join(" · ");
+      if (summary) return summary.slice(0, 320);
+    } catch {
+      // A malformed diagnostic must never hide the primary transaction result.
+    }
+  }
+  return null;
+}
+
+/** Convert Stellar XDR errors into an actionable message instead of `[object Object]`. */
+export function formatTransactionResultError(
+  errorResult?: xdr.TransactionResult,
+  diagnosticEvents: xdr.DiagnosticEvent[] = []
+): string {
+  if (!errorResult) return "RPC menolak transaksi tanpa detail hasil.";
+
+  try {
+    const transactionResult = errorResult.result();
+    const transactionCode = transactionResult.switch().name;
+    const codes: string[] = [transactionCode];
+    let explanation = TRANSACTION_ERROR_MESSAGES[transactionCode] ?? "Transaksi ditolak oleh Stellar.";
+
+    if (transactionCode === "txFailed") {
+      for (const operation of transactionResult.results()) {
+        const operationCode = operation.switch().name;
+        if (operationCode !== "opInner") {
+          codes.push(operationCode);
+          explanation = OPERATION_ERROR_MESSAGES[operationCode] ?? explanation;
+          continue;
+        }
+
+        const inner = operation.tr();
+        const operationType = inner.switch().name;
+        codes.push(operationType);
+        if (operationType === "invokeHostFunction") {
+          const hostCode = inner.invokeHostFunctionResult().switch().name;
+          codes.push(hostCode);
+          explanation = OPERATION_ERROR_MESSAGES[hostCode] ?? explanation;
+        }
+      }
+    }
+
+    const diagnostic = getDiagnosticSummary(diagnosticEvents);
+    return `${explanation} Kode: ${codes.join(" / ")}.${diagnostic ? ` Diagnostic: ${diagnostic}` : ""}`;
+  } catch {
+    return "RPC menolak transaksi dan detail XDR tidak dapat dibaca.";
+  }
 }
 
 let rpcServer: rpc.Server | null = null;
@@ -57,7 +162,8 @@ export async function prepareContractTx(
       networkPassphrase,
     })
       .addOperation(contract.call(method, ...args))
-      .setTimeout(30)
+      // Give users enough time to inspect and approve the wallet popup.
+      .setTimeout(300)
       .build();
 
     const sim = await server.simulateTransaction(tx);
@@ -89,9 +195,24 @@ export async function submitSignedTx(signedXdr: string): Promise<TxResult> {
     const tx = TransactionBuilder.fromXDR(signedXdr, getNetworkPassphrase());
     const result = await server.sendTransaction(tx);
     if (result.status === "ERROR") {
-      return { hash: "", success: false, error: result.errorResult?.result()?.toString() ?? "Submit failed" };
+      return {
+        hash: result.hash,
+        success: false,
+        error: formatTransactionResultError(result.errorResult, result.diagnosticEvents),
+      };
     }
-    return { hash: result.hash, success: true, result: "Submitted" };
+    if (result.status === "TRY_AGAIN_LATER") {
+      return {
+        hash: result.hash,
+        success: false,
+        error: "Stellar RPC sedang sibuk. Tunggu beberapa detik lalu coba lagi.",
+      };
+    }
+    return {
+      hash: result.hash,
+      success: true,
+      result: result.status === "DUPLICATE" ? "Already submitted" : "Submitted",
+    };
   } catch (e) {
     return { hash: "", success: false, error: e instanceof Error ? e.message : "Failed to submit tx" };
   }
@@ -104,7 +225,7 @@ export async function simulateTx(
   const acct = await server.getAccount(sourcePubKey);
   const tx = new TransactionBuilder(acct, { fee: "1000", networkPassphrase: getNetworkPassphrase() })
     .addOperation(contract.call(method, ...args))
-    .setTimeout(30)
+    .setTimeout(300)
     .build();
   const sim = await server.simulateTransaction(tx);
   if (rpc.Api.isSimulationError(sim)) throw new Error("Simulation failed: " + JSON.stringify(sim));

@@ -11,9 +11,13 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWallet } from "@/components/wallet/wallet-provider";
@@ -37,6 +41,16 @@ interface HuntFormData {
   asset: "XLM" | "USDC";
   deadline: string;
 }
+
+type SubmitPhase = "idle" | "uploading" | "preparing" | "signing" | "confirming" | "indexing";
+
+const SUBMIT_PHASE_LABEL: Record<Exclude<SubmitPhase, "idle">, string> = {
+  uploading: "Mengunggah bukti ke IPFS",
+  preparing: "Simulasi contract call",
+  signing: "Menunggu signature wallet dan submit",
+  confirming: "Menunggu konfirmasi Stellar Testnet",
+  indexing: "Memverifikasi dan menyimpan hasil on-chain",
+};
 
 const INITIAL_FORM: HuntFormData = {
   huntType: null,
@@ -83,6 +97,7 @@ export function CreateHuntWizard() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<HuntFormData>(INITIAL_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<SubmitPhase>("idle");
   const [isSuccess, setIsSuccess] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [pendingIndex, setPendingIndex] = useState<{
@@ -91,6 +106,7 @@ export function CreateHuntWizard() {
     photoCid: string | null;
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
 
   const updateField = <K extends keyof HuntFormData>(
     key: K,
@@ -132,23 +148,36 @@ export function CreateHuntWizard() {
     if (!pk || huntType === null) return;
 
     setIsSubmitting(true);
+    setSubmitPhase("preparing");
     setSubmitError(null);
 
     try {
       // If the chain call already succeeded, retry only the idempotent index step.
       if (pendingIndex) {
+        setSubmitPhase("confirming");
         const confirmation = await pollTx(pendingIndex.transactionHash, 30);
         if (!confirmation.success) {
           throw new Error(confirmation.error ?? "Transaksi belum terkonfirmasi");
         }
-        await indexConfirmedHunt({ ...pendingIndex, clue: form.clue });
+        setTxHash(pendingIndex.transactionHash);
         setIsSuccess(true);
+        setSubmitPhase("indexing");
+        try {
+          await indexConfirmedHunt({ ...pendingIndex, clue: form.clue });
+          setPendingIndex(null);
+          setIndexError(null);
+        } catch (indexingError) {
+          setIndexError(
+            indexingError instanceof Error ? indexingError.message : "Backend belum dapat menyimpan hunt"
+          );
+        }
         return;
       }
 
       // Step 1: Upload optional reference photo through the authenticated server.
       let photoCid = "";
       if (form.photoFile) {
+        setSubmitPhase("uploading");
         const ipfsResult = await uploadToIpfs(form.photoFile);
         photoCid = ipfsResult.cid;
       }
@@ -164,6 +193,7 @@ export function CreateHuntWizard() {
       const amountStroops = BigInt(Math.round(parseFloat(form.amount) * 10_000_000));
 
       // Step 5: Build & simulate contract tx
+      setSubmitPhase("preparing");
       const result = await createHuntTx(
         pk,
         huntIdHash,
@@ -181,14 +211,15 @@ export function CreateHuntWizard() {
         return;
       }
 
-      // Step 6: Sign via Freighter & submit to network
+      // Step 6: Sign through the selected wallet and submit to the network.
+      setSubmitPhase("signing");
       const submitResult = await signAndSubmit(result.xdr);
+      if (submitResult.hash) setTxHash(submitResult.hash);
       if (!submitResult.success || !submitResult.hash) {
         setSubmitError(submitResult.error ?? "Gagal submit transaksi");
         return;
       }
 
-      setTxHash(submitResult.hash);
       const indexPayload = {
         transactionHash: submitResult.hash,
         huntIdHash,
@@ -197,17 +228,48 @@ export function CreateHuntWizard() {
       setPendingIndex(indexPayload);
 
       // Step 7: wait for finality, then let the server verify and index the call.
+      setSubmitPhase("confirming");
       const confirmation = await pollTx(submitResult.hash, 30);
       if (!confirmation.success) {
         throw new Error(confirmation.error ?? "Transaksi belum terkonfirmasi");
       }
-      await indexConfirmedHunt({ ...indexPayload, clue: form.clue });
-
+      // On-chain confirmation is the source of truth. Database indexing is a
+      // recoverable secondary step and must never turn a successful contract
+      // call into a failed transaction in the UI.
       setIsSuccess(true);
+      setSubmitPhase("indexing");
+      try {
+        await indexConfirmedHunt({ ...indexPayload, clue: form.clue });
+        setPendingIndex(null);
+        setIndexError(null);
+      } catch (indexingError) {
+        setIndexError(
+          indexingError instanceof Error ? indexingError.message : "Backend belum dapat menyimpan hunt"
+        );
+      }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setIsSubmitting(false);
+      setSubmitPhase("idle");
+    }
+  };
+
+  const retryIndex = async () => {
+    if (!pendingIndex || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitPhase("indexing");
+    try {
+      await indexConfirmedHunt({ ...pendingIndex, clue: form.clue });
+      setPendingIndex(null);
+      setIndexError(null);
+    } catch (indexingError) {
+      setIndexError(
+        indexingError instanceof Error ? indexingError.message : "Backend belum dapat menyimpan hunt"
+      );
+    } finally {
+      setIsSubmitting(false);
+      setSubmitPhase("idle");
     }
   };
 
@@ -219,18 +281,54 @@ export function CreateHuntWizard() {
         <div className="rounded-full bg-primary/10 p-4 mb-6">
           <Check className="size-10 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2">Hunt Berhasil Dibuat!</h2>
+        <h2 className="text-2xl font-bold mb-2">Hunt Berhasil Dibuat On-chain!</h2>
         <p className="text-muted-foreground mb-4 max-w-md">
-          Harta karunmu sudah live di peta. Hunter akan segera mencari!
+          Contract call sudah dikonfirmasi oleh Stellar Testnet.
         </p>
         {txHash ? (
-          <div className="mb-6 rounded-lg bg-muted px-4 py-2 text-xs font-mono text-center break-all">
-            <span className="text-muted-foreground">Tx: </span>
-            {txHash.slice(0, 12)}...{txHash.slice(-8)}
+          <div className="mb-6 space-y-2 rounded-lg border bg-muted/40 px-4 py-3 text-center">
+            <Badge variant="secondary">Confirmed on Testnet</Badge>
+            <code className="block break-all text-xs">{txHash}</code>
+            <a
+              href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4"
+            >
+              Verifikasi contract call <ExternalLink className="size-3" />
+            </a>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground mb-6">
             Menunggu konfirmasi transaksi...
+          </p>
+        )}
+        {indexError ? (
+          <div role="alert" className="mb-6 max-w-md rounded-lg border border-amber-300 bg-amber-50 p-3 text-left text-amber-900">
+            <p className="text-sm font-medium">Sinkronisasi peta masih tertunda</p>
+            <p className="mt-1 text-xs">
+              Transaksi tetap berhasil dan tidak perlu dikirim ulang. Backend database belum dapat
+              menyimpan hunt: {indexError}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 border-amber-400 bg-white"
+              disabled={isSubmitting}
+              onClick={() => void retryIndex()}
+            >
+              {isSubmitting ? (
+                <Loader2 className="mr-2 size-3 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 size-3" />
+              )}
+              Coba sinkronkan lagi
+            </Button>
+          </div>
+        ) : (
+          <p className="mb-6 text-sm text-muted-foreground">
+            Data hunt sudah tersinkron dan siap ditampilkan di peta.
           </p>
         )}
         <div className="flex gap-3">
@@ -240,14 +338,10 @@ export function CreateHuntWizard() {
           <Button onClick={() => router.push("/profile")}>
             Lihat Profile
           </Button>
+        </div>
       </div>
-
-      {submitError && (
-        <p className="mt-4 text-sm text-destructive text-center">{submitError}</p>
-      )}
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -296,6 +390,55 @@ export function CreateHuntWizard() {
           )}
         </CardContent>
       </Card>
+
+      {isSubmitting && submitPhase !== "idle" ? (
+        <div
+          role="status"
+          data-testid="contract-transaction-status"
+          className="mt-4 flex items-center gap-3 rounded-xl border bg-secondary/50 p-3"
+        >
+          <Loader2 className="size-4 shrink-0 animate-spin" />
+          <div>
+            <p className="text-sm font-medium">Contract transaction in progress</p>
+            <p className="text-xs text-muted-foreground">{SUBMIT_PHASE_LABEL[submitPhase]}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {submitError ? (
+        <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">
+          <p className="text-sm font-medium">Contract transaction gagal diselesaikan</p>
+          <p className="mt-1 text-xs">{submitError}</p>
+          {form.photoFile && /IPFS|upload/i.test(submitError) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 border-red-300 bg-white text-red-800 hover:bg-red-100"
+              onClick={() => {
+                updateField("photoFile", null);
+                setSubmitError(null);
+              }}
+            >
+              Lanjut tanpa foto opsional
+            </Button>
+          ) : null}
+          {txHash ? (
+            <div className="mt-3 border-t border-red-200 pt-3">
+              <p className="text-xs font-medium">Contract call sudah dikirim:</p>
+              <code className="mt-1 block break-all text-xs">{txHash}</code>
+              <a
+                href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4"
+              >
+                Periksa status di explorer <ExternalLink className="size-3" />
+              </a>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Navigation */}
       <div className="flex justify-between mt-6">

@@ -6,7 +6,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7B61FF?logo=stellar)](https://stellar.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase)](https://supabase.com/)
-[![CI](https://img.shields.io/badge/CI-12_contract_%2B_18_web_tests-success)](.github/workflows/ci.yml)
+[![CI](https://img.shields.io/badge/CI-12_contract_%2B_23_web_tests-success)](.github/workflows/ci.yml)
 
 JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, wallet Freighter, dan escrow Soroban. Versi yang aktif saat ini adalah **MVP Level 2: GPS Hunt di Stellar Testnet**.
 
@@ -81,6 +81,33 @@ Verified transaction: [`f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029e7890dce
 
 Seluruh screenshot berasal dari wallet dan transaksi Testnet nyata, bukan mock data.
 
+## Level 2 Submission
+
+| Requirement | Implementasi | Status |
+|---|---|---|
+| Multi-wallet | Freighter extension dan Albedo web wallet | Siap |
+| Tiga atau lebih jenis error | Wallet/network, simulation/contract, RPC/confirmation, IPFS, dan database indexing | Siap |
+| Contract deployed di Testnet | GPS Hunt Factory aktif dan dapat diverifikasi | Siap |
+| Contract dipanggil dari frontend | `create_hunt` ditandatangani wallet dan dikirim dari wizard | Siap |
+| Transaction status visible | Fase prepare, sign, submit, confirmation, hasil, hash, dan link explorer | Siap |
+| Real-time event integration | Polling cursor Soroban RPC setiap 5 detik dengan deduplikasi dan retry | Siap |
+| Minimum 10 meaningful commits | Lebih dari 40 commit sebelum penambahan Level 2 | Siap |
+
+### Level 2 Evidence
+
+| Multi-wallet options | Successful frontend contract call |
+|---|---|
+| ![Freighter and Albedo wallet options](apps/web/public/screenshots/level-2/wallet-options.png) | ![Confirmed create hunt contract call](apps/web/public/screenshots/level-2/contract-call-success.png) |
+
+![Real-time confirmed Soroban events](apps/web/public/screenshots/level-2/live-contract-event.png)
+
+- Deployed factory: [`CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55`](https://stellar.expert/explorer/testnet/contract/CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55)
+- Verified frontend contract call: [`a45ed8446b513b0e7c4a840021174345570873bb0232f1f548707fc96bae7302`](https://stellar.expert/explorer/testnet/tx/a45ed8446b513b0e7c4a840021174345570873bb0232f1f548707fc96bae7302)
+- Network result: `SUCCESS`, ledger `4364209`, method `create_hunt`
+- Live integration proof: the `hunt_created` event for the same hash is displayed by the wallet event feed.
+
+The Stellar ledger is the canonical source of transaction success. Supabase indexing is an idempotent, retryable secondary step, so an unavailable database never causes the UI to resend an already-confirmed escrow transaction.
+
 ## Tampilan
 
 | Landing | Map |
@@ -98,7 +125,7 @@ Seluruh screenshot berasal dari wallet dan transaksi Testnet nyata, bukan mock d
 | Web | Next.js 16.3.3, React 19, TypeScript 5 |
 | UI | Tailwind CSS 4, Base UI, Lucide |
 | Map | Leaflet dan OpenStreetMap |
-| Wallet | Freighter API |
+| Wallet | Freighter API dan Albedo |
 | Blockchain | Stellar Testnet, Soroban SDK 27.0.2 |
 | Contracts | Rust/WASM: factory, instance, reputation, dispute, quest-chain |
 | Database | Supabase PostgreSQL dengan Row Level Security |
@@ -201,7 +228,7 @@ npm run build
 npm run test:e2e
 ```
 
-Status terakhir: typecheck, lint, production build, dependency audit, dan **18/18 Playwright tests** lulus.
+Status terakhir: typecheck, lint, production build, dependency audit, dan **23/23 Playwright tests** lulus.
 
 ### Smart contracts
 

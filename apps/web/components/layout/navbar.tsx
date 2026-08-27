@@ -22,7 +22,7 @@ const NAV_ITEMS = [
 ] as const;
 
 export function Navbar() {
-  const { isConnected, publicKey, connect, disconnect, isConnecting } = useWallet();
+  const { isConnected, publicKey, walletName, connect, disconnect, isConnecting } = useWallet();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const truncateKey = (key: string) =>
@@ -56,7 +56,7 @@ export function Navbar() {
           {isConnected && publicKey ? (
             <div className="hidden md:flex items-center gap-2">
               <Badge variant="secondary" className="font-mono text-xs">
-                {truncateKey(publicKey)}
+                {walletName ? `${walletName} · ` : ""}{truncateKey(publicKey)}
               </Badge>
               <Button variant="outline" size="sm" onClick={disconnect}>
                 Disconnect
@@ -66,7 +66,7 @@ export function Navbar() {
             <Button
               variant="default"
               size="sm"
-              onClick={connect}
+              onClick={() => void connect()}
               disabled={isConnecting}
               className="hidden md:inline-flex"
             >
@@ -85,7 +85,7 @@ export function Navbar() {
                 {isConnected && publicKey ? (
                   <div className="flex flex-col gap-2">
                     <Badge variant="secondary" className="font-mono text-xs w-fit">
-                      {truncateKey(publicKey)}
+                      {walletName ? `${walletName} · ` : ""}{truncateKey(publicKey)}
                     </Badge>
                     <Button variant="outline" size="sm" onClick={disconnect}>
                       Disconnect
@@ -95,7 +95,7 @@ export function Navbar() {
                   <Button
                     variant="default"
                     onClick={() => {
-                      connect();
+                      void connect();
                       setMobileOpen(false);
                     }}
                     disabled={isConnecting}

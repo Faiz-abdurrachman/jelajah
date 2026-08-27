@@ -46,7 +46,7 @@
 ## 🧪 E2E Tests
 
 ```
-Running 18 tests using 4 workers
+Running 23 tests using 4 workers
   ✅ Landing Page — page loads with title and CTA
   ✅ Landing Page — how it works section renders
   ✅ Landing Page — Lihat Peta button navigates to map
@@ -66,7 +66,13 @@ Running 18 tests using 4 workers
   ✅ XLM Payment — form dilindungi wallet connection
   ✅ XLM Payment — Horizon failure menjadi feedback actionable
 
-  18 passed
+  ✅ Level 2 — readable rejected-contract XDR
+  ✅ Level 2 — Freighter dan Albedo wallet options
+  ✅ Level 2 — confirmed Soroban event terlihat di UI
+  ✅ Level 2 — live event feed pulih setelah RPC error
+  ✅ Level 2 — Albedo signed challenge tervalidasi
+
+  23 passed
 ```
 
 Run: `npm run test:e2e`
@@ -126,6 +132,22 @@ Verified Testnet transaction: [`f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029
 
 ---
 
+## 🥋 Level 2 Submission Evidence
+
+JELAJAH menyediakan pilihan Freighter dan Albedo, memanggil GPS Hunt Factory dari frontend, menampilkan fase transaksi, dan memperbarui event Soroban setiap lima detik.
+
+| Wallet options | Confirmed frontend contract call |
+|---|---|
+| ![Freighter and Albedo](./public/screenshots/level-2/wallet-options.png) | ![Confirmed create hunt](./public/screenshots/level-2/contract-call-success.png) |
+
+![Live contract events](./public/screenshots/level-2/live-contract-event.png)
+
+- Factory: [`CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55`](https://stellar.expert/explorer/testnet/contract/CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55)
+- Frontend `create_hunt`: [`a45ed8446b513b0e7c4a840021174345570873bb0232f1f548707fc96bae7302`](https://stellar.expert/explorer/testnet/tx/a45ed8446b513b0e7c4a840021174345570873bb0232f1f548707fc96bae7302)
+- Result: `SUCCESS` pada ledger `4364209`; event `hunt_created` tampil di live feed.
+
+---
+
 ## 🧩 Tech Stack
 
 | Layer | Technology |
@@ -135,7 +157,7 @@ Verified Testnet transaction: [`f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029
 | **Blockchain** | Stellar (Soroban SDK 27.0.2, RPC + Horizon) |
 | **Smart Contracts** | 5 Rust contracts (hunt-factory, hunt-instance, reputation, dispute, quest-chain) |
 | **Database** | Supabase (PostgreSQL managed, 17 tables, realtime) |
-| **Wallet** | Freighter API (Stellar Wallets Kit menyusul) |
+| **Wallet** | Freighter API + Albedo |
 | **Map** | Mapbox GL JS (CDN load, token opsional) |
 | **Storage** | IPFS via Pinata (service siap, butuh API key) |
 
@@ -344,7 +366,9 @@ jelajah/
 | Create Hunt (6-step wizard) | ✅ |
 | Claim Hunt (GPS + foto + submit) | ✅ |
 | Contracts deployed to testnet | ✅ |
-| Multi-wallet | ⬜ |
+| Multi-wallet (Freighter + Albedo) | ✅ |
+| Live Soroban contract events | ✅ |
+| Transaction phases, hash, dan recovery | ✅ |
 
 ### Level 3 — Orange Belt (⬜)
 | Fitur | Status |

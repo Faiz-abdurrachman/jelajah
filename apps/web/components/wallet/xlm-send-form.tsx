@@ -27,15 +27,10 @@ type PaymentPhase =
   | "success"
   | "error";
 
-const PHASE_LABEL: Record<Exclude<PaymentPhase, "idle" | "success" | "error">, string> = {
-  preparing: "Menyiapkan transaksi...",
-  signing: "Konfirmasi di Freighter...",
-  submitting: "Mengirim ke Testnet...",
-};
-
 export function XlmSendForm() {
   const {
     publicKey,
+    walletName,
     balance,
     signTransactionXdr,
     refreshBalance,
@@ -69,7 +64,7 @@ export function XlmSendForm() {
       setPhase("signing");
       const signed = await signTransactionXdr(unsignedXdr);
       if (!signed.success || !signed.signedXdr) {
-        throw new Error(signed.error ?? "Transaksi ditolak di Freighter");
+        throw new Error(signed.error ?? "Transaksi ditolak di wallet");
       }
 
       setPhase("submitting");
@@ -169,7 +164,11 @@ export function XlmSendForm() {
             {isBusy ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
-                {PHASE_LABEL[phase]}
+                {phase === "preparing"
+                  ? "Menyiapkan transaksi..."
+                  : phase === "signing"
+                    ? `Konfirmasi di ${walletName ?? "wallet"}...`
+                    : "Mengirim ke Testnet..."}
               </>
             ) : (
               <>

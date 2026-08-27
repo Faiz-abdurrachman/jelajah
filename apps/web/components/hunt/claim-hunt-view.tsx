@@ -38,7 +38,7 @@ interface ClaimHuntViewProps {
 
 export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
   const router = useRouter();
-  const { isConnected, publicKey, signAndSubmit } = useWallet();
+  const { isConnected, publicKey, walletName, signAndSubmit } = useWallet();
   const [phase, setPhase] = useState<ClaimPhase>("idle");
   const [currentPosition, setCurrentPosition] = useState<GeoPosition | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
@@ -312,7 +312,7 @@ export function ClaimHuntView({ hunt }: ClaimHuntViewProps) {
             <p className="text-sm text-muted-foreground">
               {phase === "uploading"
                 ? "Upload foto ke IPFS"
-                : "Buka Freighter untuk menandatangani transaksi"}
+                : `Buka ${walletName ?? "wallet"} untuk menandatangani transaksi`}
             </p>
           </CardContent>
         </Card>

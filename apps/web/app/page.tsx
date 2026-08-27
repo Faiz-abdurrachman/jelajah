@@ -35,7 +35,7 @@ export default function LandingPage() {
               Mulai Berburu
             </Button>
           ) : (
-            <Button size="lg" onClick={connect} disabled={isConnecting}>
+            <Button size="lg" onClick={() => void connect()} disabled={isConnecting}>
               {isConnecting ? "Connecting..." : "Connect Wallet"}
             </Button>
           )}

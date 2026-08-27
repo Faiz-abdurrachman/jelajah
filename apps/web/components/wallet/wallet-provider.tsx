@@ -9,16 +9,18 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import {
-  getAddress,
-  getNetwork,
-  requestAccess,
-  signMessage,
-  signTransaction,
-} from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
-import { NETWORKS, STELLAR_CONFIG } from "@/config/constants";
-import { submitSignedTx, getNetworkPassphrase } from "@/lib/stellar/soroban";
+import { STELLAR_CONFIG } from "@/config/constants";
+import { submitSignedTx } from "@/lib/stellar/soroban";
+import {
+  connectWallet,
+  getWalletName,
+  normalizeWalletError,
+  signWalletChallenge,
+  signWalletTransaction,
+  type WalletId,
+} from "@/lib/stellar/wallet-adapters";
+import { WalletSelector } from "@/components/wallet/wallet-selector";
 import type { WalletBalance, Transaction } from "@/types";
 
 // ─── Types ────────────────────────────────────────────
@@ -26,11 +28,13 @@ import type { WalletBalance, Transaction } from "@/types";
 interface WalletContextValue {
   isConnected: boolean;
   publicKey: string | null;
+  walletId: WalletId | null;
+  walletName: string | null;
   balance: WalletBalance | null;
   transactions: Transaction[];
   isConnecting: boolean;
   error: string | null;
-  connect: () => Promise<void>;
+  connect: (walletId?: WalletId) => Promise<void>;
   disconnect: () => void;
   refreshBalance: () => Promise<void>;
   refreshTransactions: () => Promise<void>;
@@ -44,13 +48,9 @@ interface WalletContextValue {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-function bytesToBase64(value: Uint8Array): string {
-  let binary = "";
-  for (const byte of value) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
+const WALLET_STORAGE_KEY = "jelajah-wallet";
 
-async function authenticateWallet(address: string): Promise<void> {
+async function authenticateWallet(address: string, walletId: WalletId): Promise<void> {
   const challengeResponse = await fetch("/api/auth/challenge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -64,22 +64,16 @@ async function authenticateWallet(address: string): Promise<void> {
     throw new Error(challenge.error ?? "Gagal membuat challenge wallet");
   }
 
-  const signed = await signMessage(challenge.message, {
-    address,
-    networkPassphrase: getNetworkPassphrase(),
-  });
-  if (signed.error || !signed.signedMessage || signed.signerAddress !== address) {
-    throw new Error("Tanda tangan login ditolak atau memakai akun yang berbeda");
-  }
-
-  const signature =
-    typeof signed.signedMessage === "string"
-      ? signed.signedMessage
-      : bytesToBase64(new Uint8Array(signed.signedMessage));
+  const signed = await signWalletChallenge(walletId, address, challenge.message);
   const verifyResponse = await fetch("/api/auth/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, signature }),
+    body: JSON.stringify({
+      address,
+      signature: signed.signature,
+      signedMessage: signed.signedMessage,
+      scheme: signed.scheme,
+    }),
   });
   const verification = (await verifyResponse.json()) as { error?: string };
   if (!verifyResponse.ok) {
@@ -87,80 +81,79 @@ async function authenticateWallet(address: string): Promise<void> {
   }
 }
 
-async function assertFreighterNetwork(): Promise<void> {
-  if (getNetworkPassphrase() !== NETWORKS.testnet.passphrase) {
-    throw new Error("JELAJAH Level 1 harus dikonfigurasi untuk Stellar Testnet");
-  }
-  const configured = await getNetwork();
-  if (configured.error) {
-    throw new Error("Gagal membaca network Freighter");
-  }
-  if (configured.networkPassphrase !== NETWORKS.testnet.passphrase) {
-    throw new Error("Ubah network Freighter ke Stellar Testnet lalu coba lagi");
-  }
-}
-
 // ─── Provider ─────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [walletId, setWalletId] = useState<WalletId | null>(null);
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const [connectingWallet, setConnectingWallet] = useState<WalletId | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Restore only when the wallet address also has a valid server session.
   useEffect(() => {
     const checkExistingConnection = async () => {
       try {
-        const [{ address }, sessionResponse] = await Promise.all([
-          getAddress(),
-          fetch("/api/auth/session", { cache: "no-store" }),
-        ]);
-        if (address && sessionResponse.ok) {
-          const session = (await sessionResponse.json()) as { address?: string };
-          if (session.address !== address) return;
-          await assertFreighterNetwork();
-          setPublicKey(address);
-        }
+        const saved = JSON.parse(localStorage.getItem(WALLET_STORAGE_KEY) ?? "null") as {
+          address?: unknown;
+          walletId?: unknown;
+        } | null;
+        if (
+          !saved ||
+          typeof saved.address !== "string" ||
+          (saved.walletId !== "freighter" && saved.walletId !== "albedo")
+        ) return;
+
+        const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!sessionResponse.ok) return;
+        const session = (await sessionResponse.json()) as { address?: string };
+        if (session.address !== saved.address) return;
+        setWalletId(saved.walletId);
+        setPublicKey(saved.address);
       } catch {
-        // Freighter not installed
+        localStorage.removeItem(WALLET_STORAGE_KEY);
       }
     };
     checkExistingConnection();
   }, []);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (selectedWallet?: WalletId) => {
+    if (!selectedWallet) {
+      setError(null);
+      setSelectorOpen(true);
+      return;
+    }
+
     setIsConnecting(true);
+    setConnectingWallet(selectedWallet);
     setError(null);
 
     try {
-      // Freighter v6: requestAccess triggers permission popup and returns address
-      const { address, error: accessError } = await requestAccess();
-      let resolvedAddress = address;
-      if (accessError || !address) {
-        // If requestAccess fails, try getAddress directly (already authorized)
-        const { address: addr, error: addrError } = await getAddress();
-        if (addrError || !addr) {
-          throw new Error("Gagal mendapatkan address wallet. Pastikan Freighter terinstall dan unlocked.");
-        }
-        resolvedAddress = addr;
-      }
-      await assertFreighterNetwork();
-      await authenticateWallet(resolvedAddress);
-      setPublicKey(resolvedAddress);
+      const address = await connectWallet(selectedWallet);
+      await authenticateWallet(address, selectedWallet);
+      setWalletId(selectedWallet);
+      setPublicKey(address);
+      localStorage.setItem(
+        WALLET_STORAGE_KEY,
+        JSON.stringify({ address, walletId: selectedWallet })
+      );
+      setSelectorOpen(false);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Gagal connect ke Freighter";
-      setError(message);
+      setError(normalizeWalletError(err, selectedWallet));
     } finally {
       setIsConnecting(false);
+      setConnectingWallet(null);
     }
   }, []);
 
   const disconnect = useCallback(() => {
     void fetch("/api/auth/session", { method: "DELETE" });
+    localStorage.removeItem(WALLET_STORAGE_KEY);
     setPublicKey(null);
+    setWalletId(null);
     setBalance(null);
     setTransactions([]);
     setError(null);
@@ -286,26 +279,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       success: boolean;
       error?: string;
     }> => {
-      if (!publicKey) {
+      if (!publicKey || !walletId) {
         return { signedXdr: "", success: false, error: "Wallet not connected" };
       }
 
-      const { signedTxXdr, signerAddress, error: signError } = await signTransaction(xdr, {
-        networkPassphrase: getNetworkPassphrase(),
-        address: publicKey,
-      });
-
-      if (signError || !signedTxXdr || signerAddress !== publicKey) {
+      try {
+        const signedXdr = await signWalletTransaction(walletId, publicKey, xdr);
+        return { signedXdr, success: true };
+      } catch (signError) {
         return {
           signedXdr: "",
           success: false,
-          error: signError ?? "User rejected signing or selected a different account",
+          error: normalizeWalletError(signError, walletId),
         };
       }
-
-      return { signedXdr: signedTxXdr, success: true };
     },
-    [publicKey]
+    [publicKey, walletId]
   );
 
   const signAndSubmit = useCallback(
@@ -326,6 +315,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       value={{
         isConnected: !!publicKey,
         publicKey,
+        walletId,
+        walletName: getWalletName(walletId),
         balance,
         transactions,
         isConnecting,
@@ -339,6 +330,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <WalletSelector
+        open={selectorOpen}
+        onOpenChange={(open) => {
+          if (!isConnecting) setSelectorOpen(open);
+        }}
+        onSelect={(selectedWallet) => void connect(selectedWallet)}
+        connectingWallet={connectingWallet}
+        error={error}
+      />
     </WalletContext.Provider>
   );
 }

@@ -5,12 +5,14 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { XlmSendForm } from "@/components/wallet/xlm-send-form";
+import { ContractEventFeed } from "@/components/wallet/contract-event-feed";
 import { Wallet, RefreshCw, ExternalLink } from "lucide-react";
 
 export default function WalletPage() {
   const {
     isConnected,
     publicKey,
+    walletName,
     balance,
     transactions,
     connect,
@@ -34,7 +36,7 @@ export default function WalletPage() {
         {!isConnected ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <Button onClick={connect} disabled={isConnecting} size="lg">
+              <Button onClick={() => void connect()} disabled={isConnecting} size="lg">
                 {isConnecting ? "Connecting..." : "Connect Wallet"}
               </Button>
             </CardContent>
@@ -77,9 +79,12 @@ export default function WalletPage() {
             {/* Connected Account */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-medium">
-                  Connected Account
-                </CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-sm font-medium">Connected Account</CardTitle>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium">
+                    {walletName} · Testnet
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
                 <code className="min-w-0 break-all text-sm font-mono sm:hidden">
@@ -141,6 +146,10 @@ export default function WalletPage() {
             </Card>
           </div>
         )}
+
+        <div className="mt-4">
+          <ContractEventFeed />
+        </div>
       </div>
     </RequireLevel>
   );

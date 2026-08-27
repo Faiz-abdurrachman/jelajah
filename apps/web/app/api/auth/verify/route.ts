@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Keypair } from "@stellar/stellar-sdk";
 import {
   buildChallengeMessage,
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       address?: unknown;
       signature?: unknown;
+      signedMessage?: unknown;
+      scheme?: unknown;
     };
     if (
       typeof body.address !== "string" ||
@@ -39,9 +42,17 @@ export async function POST(request: Request) {
 
     const signature = decodeSignature(body.signature);
     const message = buildChallengeMessage(challenge);
-    const verified =
-      signature !== null &&
-      Keypair.fromPublicKey(body.address).verifyMessage(message, signature);
+    const keypair = Keypair.fromPublicKey(body.address);
+    let verified = false;
+    if (signature !== null && body.scheme === "albedo") {
+      const expectedSignedMessage = `${body.address}:${message}`;
+      if (body.signedMessage === expectedSignedMessage) {
+        const digest = createHash("sha256").update(expectedSignedMessage, "utf8").digest();
+        verified = keypair.verify(digest, signature);
+      }
+    } else if (signature !== null && (body.scheme === undefined || body.scheme === "sep53")) {
+      verified = keypair.verifyMessage(message, signature);
+    }
 
     await consumeChallenge();
     if (!verified) {
