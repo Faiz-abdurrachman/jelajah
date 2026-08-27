@@ -22,5 +22,22 @@
     "reputation": "CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3",
     "hunt_factory": "CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2"
   },
-  "configuration_transaction_hash": "3848842643579bff43e267671682956acb6607fea557fa6e03307e3f8ab2a8b9"
+  "configuration_transaction_hash": "3848842643579bff43e267671682956acb6607fea557fa6e03307e3f8ab2a8b9",
+  "production_proof": {
+    "hunt_id": "fffb52cf0f34c97d60da5258fbe75ad653d2996de08731bbd6dacc291f6ec41c",
+    "hunt_instance": "CC53OUXAOKQKUC6IXOGGKOV5M2WZXSBLPLHSCZM24F6GFZJY74JTHNA7",
+    "hider": "GBHTONLOIPXNGOZMWUB23UHVVYN6J54HJ4OBMREPMNEUHQIANWC3GPEQ",
+    "hunter": "GD4SHKFBZT2KJ76CBTND6OVMT3ACATXX6P233B2BTF424MZCNCDNJZEW",
+    "reward_stroops": 1000000,
+    "completion_xp": 100,
+    "create_hunt_transaction_hash": "85a857117c66feab6b87ddbf3b6628be7618ada9d2f681f47fa2a29905ab976b",
+    "submit_claim_transaction_hash": "5e266455247ad0c0133f4fffa0fd313041c1318045c35611b7567013fd273442",
+    "approve_and_award_xp_transaction_hash": "619042c261559c4b0337657c3c8e7dc36df3b0cf9707eeba677b2b4836304c41",
+    "verified_state": {
+      "hunt_status": "Claimed",
+      "escrow_balance_stroops": 0,
+      "hunter_xp": 100,
+      "reward_processed": true
+    }
+  }
 }
