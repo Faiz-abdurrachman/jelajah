@@ -1,10 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
-    token::TokenClient,
-    vec, Address, BytesN, Env, IntoVal, MuxedAddress, Symbol,
+    token::TokenClient, Address, BytesN, Env, MuxedAddress,
 };
 
 mod event;
@@ -336,24 +334,6 @@ impl HuntInstance {
     fn award_reputation(env: &Env, hunt_id: &BytesN<32>, hunter: &Address) {
         let reputation: Address = Self::get_required(env, &DataKey::Reputation);
         let caller = env.current_contract_address();
-
-        env.authorize_as_current_contract(vec![
-            env,
-            InvokerContractAuthEntry::Contract(SubContractInvocation {
-                context: ContractContext {
-                    contract: reputation.clone(),
-                    fn_name: Symbol::new(env, "award_hunt_xp"),
-                    args: vec![
-                        env,
-                        caller.clone().into_val(env),
-                        hunt_id.clone().into_val(env),
-                        hunter.clone().into_val(env),
-                        HUNT_COMPLETION_XP.into_val(env),
-                    ],
-                },
-                sub_invocations: vec![env],
-            }),
-        ]);
 
         ReputationClient::new(env, &reputation).award_hunt_xp(
             &caller,

@@ -25,9 +25,10 @@ HuntInstance ── award_hunt_xp ──────────┘
 - Only that administrator can configure the trusted `HuntFactory`.
 - The configured factory registers the address created for each `hunt_id`.
 - Only the registered instance for that exact `hunt_id` can award its XP.
-- Cross-contract calls authorize the current contract with
-  `Env::authorize_as_current_contract`; the receiving contract validates that
-  authorization with `Address::require_auth`.
+- The receiving contract validates the immediate contract caller with
+  `Address::require_auth`. Soroban automatically authorizes direct contract
+  calls; `Env::authorize_as_current_contract` is reserved for deeper invocation
+  trees and is not needed in this direct A→B flow.
 - A processed marker keyed by `hunt_id` prevents replay, even if a future
   instance regression attempted to award the same hunt twice.
 - XP amounts are selected by the trusted instance contract, not by the wallet.

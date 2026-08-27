@@ -1,10 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
-    token::TokenClient,
-    vec, Address, BytesN, Env, IntoVal, MuxedAddress, Symbol,
+    token::TokenClient, Address, BytesN, Env, MuxedAddress,
 };
 
 mod event;
@@ -215,23 +213,6 @@ impl HuntFactory {
         instance: &Address,
     ) {
         let caller = env.current_contract_address();
-        env.authorize_as_current_contract(vec![
-            env,
-            InvokerContractAuthEntry::Contract(SubContractInvocation {
-                context: ContractContext {
-                    contract: reputation.clone(),
-                    fn_name: Symbol::new(env, "register_hunt"),
-                    args: vec![
-                        env,
-                        caller.clone().into_val(env),
-                        hunt_id.clone().into_val(env),
-                        instance.clone().into_val(env),
-                    ],
-                },
-                sub_invocations: vec![env],
-            }),
-        ]);
-
         ReputationClient::new(env, reputation).register_hunt(&caller, hunt_id, instance);
     }
 
@@ -274,3 +255,6 @@ impl HuntFactory {
 
 #[cfg(all(test, feature = "factory-integration"))]
 mod test;
+
+#[cfg(all(test, feature = "full-integration"))]
+mod full_integration;

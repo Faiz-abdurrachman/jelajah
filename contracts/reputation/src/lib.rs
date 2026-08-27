@@ -56,8 +56,8 @@ impl Reputation {
         event::factory_configured(&env, admin, factory);
     }
 
-    /// Register the instance deployed for a hunt. The factory contract must
-    /// authorize this exact sub-contract invocation.
+    /// Register the instance deployed for a hunt. Soroban authorizes the
+    /// immediate calling contract; storage pins that caller to the factory.
     pub fn register_hunt(env: Env, caller: Address, hunt_id: BytesN<32>, instance: Address) {
         caller.require_auth();
         Self::bump_ttl(&env);
