@@ -1,8 +1,10 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, token::TokenClient,
-    Address, BytesN, Env, MuxedAddress,
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
+    token::TokenClient,
+    vec, Address, BytesN, Env, IntoVal, MuxedAddress, Symbol,
 };
 
 mod event;
@@ -12,6 +14,13 @@ const TTL_THRESHOLD_LEDGERS: u32 = 100_000;
 const TTL_EXTEND_TO_LEDGERS: u32 = 2_000_000;
 const GPS_SCALE: i64 = 10_000_000;
 const METERS_PER_DEGREE: i64 = 111_320;
+const HUNT_COMPLETION_XP: u32 = 100;
+
+#[contractclient(name = "ReputationClient")]
+#[allow(dead_code)]
+trait ReputationInterface {
+    fn award_hunt_xp(env: Env, caller: Address, hunt_id: BytesN<32>, user: Address, amount: u32);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[contracterror]
@@ -77,6 +86,7 @@ enum DataKey {
     GpsLng,
     Radius,
     HuntType,
+    Reputation,
     RejectedHunter(Address),
 }
 
@@ -98,6 +108,7 @@ impl HuntInstance {
         deadline: u64,
         clue_hash: BytesN<32>,
         hunt_type: u32,
+        reputation: Address,
     ) {
         Self::validate_hunt(&env, amount, gps_lat, gps_lng, radius, deadline);
 
@@ -111,6 +122,9 @@ impl HuntInstance {
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage().instance().set(&DataKey::ClueHash, &clue_hash);
         env.storage().instance().set(&DataKey::HuntType, &hunt_type);
+        env.storage()
+            .instance()
+            .set(&DataKey::Reputation, &reputation);
         env.storage()
             .instance()
             .set(&DataKey::Status, &HuntStatus::Active);
@@ -149,12 +163,7 @@ impl HuntInstance {
         let hunt_lat: i64 = Self::get_required(&env, &DataKey::GpsLat);
         let hunt_lng: i64 = Self::get_required(&env, &DataKey::GpsLng);
         let radius: u32 = Self::get_required(&env, &DataKey::Radius);
-        let distance = Self::calculate_distance(
-            claim_gps_lat,
-            claim_gps_lng,
-            hunt_lat,
-            hunt_lng,
-        );
+        let distance = Self::calculate_distance(claim_gps_lat, claim_gps_lng, hunt_lat, hunt_lng);
         if distance > i64::from(radius) {
             panic_with_error!(&env, ContractError::NotInRadius);
         }
@@ -200,10 +209,9 @@ impl HuntInstance {
         );
 
         let hunter: Address = Self::get_required(&env, &DataKey::Claimer);
-        env.storage().instance().set(
-            &DataKey::RejectedHunter(hunter.clone()),
-            &true,
-        );
+        env.storage()
+            .instance()
+            .set(&DataKey::RejectedHunter(hunter.clone()), &true);
         env.storage().instance().remove(&DataKey::Claimer);
         env.storage().instance().remove(&DataKey::ClaimPhotoHash);
         env.storage().instance().remove(&DataKey::ClaimTimer);
@@ -306,6 +314,11 @@ impl HuntInstance {
         }
     }
 
+    pub fn get_reputation(env: Env) -> Address {
+        Self::bump_ttl(&env);
+        Self::get_required(&env, &DataKey::Reputation)
+    }
+
     fn pay_reward(env: &Env, hunter: Address, automatic: bool) {
         let amount: i128 = Self::get_required(env, &DataKey::Amount);
         Self::require_escrow_balance(env, amount);
@@ -316,7 +329,38 @@ impl HuntInstance {
         Self::transfer_from_escrow(env, &hunter, amount);
 
         let hunt_id: BytesN<32> = Self::get_required(env, &DataKey::HuntId);
+        Self::award_reputation(env, &hunt_id, &hunter);
         event::reward_paid(env, hunt_id, hunter, amount, automatic);
+    }
+
+    fn award_reputation(env: &Env, hunt_id: &BytesN<32>, hunter: &Address) {
+        let reputation: Address = Self::get_required(env, &DataKey::Reputation);
+        let caller = env.current_contract_address();
+
+        env.authorize_as_current_contract(vec![
+            env,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: reputation.clone(),
+                    fn_name: Symbol::new(env, "award_hunt_xp"),
+                    args: vec![
+                        env,
+                        caller.clone().into_val(env),
+                        hunt_id.clone().into_val(env),
+                        hunter.clone().into_val(env),
+                        HUNT_COMPLETION_XP.into_val(env),
+                    ],
+                },
+                sub_invocations: vec![env],
+            }),
+        ]);
+
+        ReputationClient::new(env, &reputation).award_hunt_xp(
+            &caller,
+            hunt_id,
+            hunter,
+            &HUNT_COMPLETION_XP,
+        );
     }
 
     fn transfer_from_escrow(env: &Env, recipient: &Address, amount: i128) {
@@ -374,9 +418,7 @@ impl HuntInstance {
     fn validate_coordinates(env: &Env, gps_lat: i64, gps_lng: i64) {
         let max_lat = 90 * GPS_SCALE;
         let max_lng = 180 * GPS_SCALE;
-        if !(-max_lat..=max_lat).contains(&gps_lat)
-            || !(-max_lng..=max_lng).contains(&gps_lng)
-        {
+        if !(-max_lat..=max_lat).contains(&gps_lat) || !(-max_lng..=max_lng).contains(&gps_lng) {
             panic_with_error!(env, ContractError::InvalidCoordinates);
         }
     }

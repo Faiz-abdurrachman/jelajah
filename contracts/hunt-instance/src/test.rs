@@ -14,10 +14,51 @@ const HUNT_LAT: i64 = -6_175_4000;
 const HUNT_LNG: i64 = 106_827_2000;
 const RADIUS_METERS: u32 = 75;
 
+#[derive(Clone)]
+#[contracttype]
+enum ReputationDataKey {
+    Xp(Address),
+    Processed(BytesN<32>),
+}
+
+#[contract]
+struct MockReputation;
+
+#[contractimpl]
+impl MockReputation {
+    pub fn award_hunt_xp(
+        env: Env,
+        caller: Address,
+        hunt_id: BytesN<32>,
+        user: Address,
+        amount: u32,
+    ) {
+        caller.require_auth();
+        assert!(!env
+            .storage()
+            .instance()
+            .has(&ReputationDataKey::Processed(hunt_id.clone())));
+        let key = ReputationDataKey::Xp(user);
+        let current: u32 = env.storage().instance().get(&key).unwrap_or(0);
+        env.storage().instance().set(&key, &(current + amount));
+        env.storage()
+            .instance()
+            .set(&ReputationDataKey::Processed(hunt_id), &true);
+    }
+
+    pub fn get_xp(env: Env, user: Address) -> u32 {
+        env.storage()
+            .instance()
+            .get(&ReputationDataKey::Xp(user))
+            .unwrap_or(0)
+    }
+}
+
 struct Fixture {
     env: Env,
     contract: Address,
     asset: Address,
+    reputation: Address,
     hider: Address,
     hunter: Address,
 }
@@ -33,6 +74,7 @@ impl Fixture {
         let hunter = Address::generate(&env);
         let stellar_asset = env.register_stellar_asset_contract_v2(asset_admin);
         let asset = stellar_asset.address();
+        let reputation = env.register(MockReputation, ());
         StellarAssetClient::new(&env, &asset).mint(&hider, &(REWARD * 2));
 
         let hunt_id = BytesN::from_array(&env, &[1; 32]);
@@ -50,19 +92,17 @@ impl Fixture {
                 DEADLINE,
                 clue_hash,
                 0_u32,
+                reputation.clone(),
             ),
         );
 
-        TokenClient::new(&env, &asset).transfer(
-            &hider,
-            &MuxedAddress::from(&contract),
-            &REWARD,
-        );
+        TokenClient::new(&env, &asset).transfer(&hider, &MuxedAddress::from(&contract), &REWARD);
 
         Self {
             env,
             contract,
             asset,
+            reputation,
             hider,
             hunter,
         }
@@ -74,6 +114,10 @@ impl Fixture {
 
     fn token(&self) -> TokenClient<'_> {
         TokenClient::new(&self.env, &self.asset)
+    }
+
+    fn reputation(&self) -> MockReputationClient<'_> {
+        MockReputationClient::new(&self.env, &self.reputation)
     }
 
     fn submit_valid_claim(&self) {
@@ -102,6 +146,11 @@ fn approve_pays_the_hunter_exactly_once() {
     assert_eq!(fixture.token().balance(&fixture.hunter), REWARD);
     assert_eq!(fixture.client().get_escrow_balance(), 0);
     assert_eq!(
+        fixture.reputation().get_xp(&fixture.hunter),
+        HUNT_COMPLETION_XP
+    );
+    assert_eq!(fixture.client().get_reputation(), fixture.reputation);
+    assert_eq!(
         fixture.client().try_approve(&fixture.hider),
         Err(Ok(ContractError::NoClaimPending.into()))
     );
@@ -127,6 +176,10 @@ fn auto_release_only_pays_after_twenty_four_hours() {
     assert_eq!(fixture.client().get_status(), HuntStatus::Claimed);
     assert_eq!(fixture.token().balance(&fixture.hunter), REWARD);
     assert_eq!(fixture.client().get_timer_remaining(), 0);
+    assert_eq!(
+        fixture.reputation().get_xp(&fixture.hunter),
+        HUNT_COMPLETION_XP
+    );
 }
 
 #[test]
@@ -144,6 +197,7 @@ fn expired_unclaimed_hunt_refunds_the_hider() {
     assert_eq!(fixture.client().get_status(), HuntStatus::Expired);
     assert_eq!(fixture.token().balance(&fixture.hider), REWARD * 2);
     assert_eq!(fixture.client().get_escrow_balance(), 0);
+    assert_eq!(fixture.reputation().get_xp(&fixture.hunter), 0);
 }
 
 #[test]
@@ -163,6 +217,7 @@ fn claim_outside_the_radius_is_rejected_without_changing_state() {
     assert_eq!(fixture.client().get_status(), HuntStatus::Active);
     assert_eq!(fixture.client().get_hunter(), None);
     assert_eq!(fixture.client().get_escrow_balance(), REWARD);
+    assert_eq!(fixture.reputation().get_xp(&fixture.hunter), 0);
 }
 
 #[test]
@@ -194,10 +249,9 @@ fn only_the_hider_can_approve_and_reject_reopens_the_hunt() {
         Err(Ok(ContractError::NotAuthorized.into()))
     );
 
-    fixture.client().reject(
-        &fixture.hider,
-        &BytesN::from_array(&fixture.env, &[6; 32]),
-    );
+    fixture
+        .client()
+        .reject(&fixture.hider, &BytesN::from_array(&fixture.env, &[6; 32]));
     assert_eq!(fixture.client().get_status(), HuntStatus::Active);
     assert_eq!(fixture.client().get_hunter(), None);
     assert_eq!(fixture.client().get_escrow_balance(), REWARD);
@@ -244,12 +298,8 @@ fn distance_math_scales_longitude_by_latitude() {
     assert_eq!(longitude_scale(90 * GPS_SCALE), 0);
 
     let equator = HuntInstance::calculate_distance(0, 0, 0, GPS_SCALE);
-    let sixty_degrees = HuntInstance::calculate_distance(
-        60 * GPS_SCALE,
-        0,
-        60 * GPS_SCALE,
-        GPS_SCALE,
-    );
+    let sixty_degrees =
+        HuntInstance::calculate_distance(60 * GPS_SCALE, 0, 60 * GPS_SCALE, GPS_SCALE);
     assert!((111_000..=112_000).contains(&equator));
     assert!((54_000..=58_000).contains(&sixty_degrees));
 }

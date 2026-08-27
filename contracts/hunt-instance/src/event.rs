@@ -58,13 +58,7 @@ pub fn claim_submitted(
     .publish(env);
 }
 
-pub fn reward_paid(
-    env: &Env,
-    hunt_id: BytesN<32>,
-    hunter: Address,
-    amount: i128,
-    automatic: bool,
-) {
+pub fn reward_paid(env: &Env, hunt_id: BytesN<32>, hunter: Address, amount: i128, automatic: bool) {
     RewardPaid {
         hunt_id,
         hunter,
@@ -74,12 +68,7 @@ pub fn reward_paid(
     .publish(env);
 }
 
-pub fn claim_rejected(
-    env: &Env,
-    hunt_id: BytesN<32>,
-    hunter: Address,
-    reason_hash: BytesN<32>,
-) {
+pub fn claim_rejected(env: &Env, hunt_id: BytesN<32>, hunter: Address, reason_hash: BytesN<32>) {
     ClaimRejected {
         hunt_id,
         hunter,
