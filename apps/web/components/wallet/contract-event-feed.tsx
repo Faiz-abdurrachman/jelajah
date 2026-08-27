@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,20 +16,23 @@ interface ContractEvent {
   successful: boolean;
 }
 
-interface EventResponse {
+interface EventBatch {
   cursor: string;
   latestLedger: number;
   monitoredContracts: string[];
   events: ContractEvent[];
-  error?: string;
 }
 
 const EVENT_LABELS: Record<string, string> = {
+  factory_configured: "Factory dikonfigurasi",
+  hunt_registered: "Hunt terdaftar",
   hunt_created: "Hunt dibuat",
   claim_submitted: "Claim dikirim",
   claim_rejected: "Claim ditolak",
   reward_paid: "Reward dibayar",
   reward_refunded: "Reward dikembalikan",
+  xp_awarded: "XP diberikan",
+  badge_issued: "Badge diberikan",
 };
 
 export function ContractEventFeed() {
@@ -38,56 +41,86 @@ export function ContractEventFeed() {
   const [contractCount, setContractCount] = useState(0);
   const [status, setStatus] = useState<"connecting" | "live" | "error">("connecting");
   const [error, setError] = useState<string | null>(null);
+  const [generation, setGeneration] = useState(0);
   const cursorRef = useRef<string | null>(null);
-  const runningRef = useRef(false);
 
-  const fetchEvents = useCallback(async (reset = false) => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    if (reset) {
-      cursorRef.current = null;
-      setStatus("connecting");
-      setError(null);
-    }
+  useEffect(() => {
+    let source: EventSource | null = null;
+    let reconnectTimer: number | null = null;
+    let stopped = false;
 
-    try {
+    const scheduleReconnect = () => {
+      if (stopped || reconnectTimer !== null) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, 2_000);
+    };
+
+    const connect = () => {
+      if (stopped) return;
       const query = cursorRef.current
         ? `?cursor=${encodeURIComponent(cursorRef.current)}`
         : "";
-      const response = await fetch(`/api/stellar/events${query}`, { cache: "no-store" });
-      const data = (await response.json()) as EventResponse;
-      if (!response.ok) throw new Error(data.error ?? "Event endpoint tidak tersedia");
+      source = new EventSource(`/api/stellar/events/stream${query}`);
+      setStatus("connecting");
 
-      cursorRef.current = data.cursor;
-      setLatestLedger(data.latestLedger);
-      setContractCount(data.monitoredContracts.length);
-      setEvents((current) => {
-        const merged = new Map(current.map((event) => [event.id, event]));
-        for (const event of data.events) merged.set(event.id, event);
-        return Array.from(merged.values())
-          .sort((a, b) => b.ledger - a.ledger || b.id.localeCompare(a.id))
-          .slice(0, 8);
+      source.addEventListener("connected", () => {
+        setError(null);
+        setStatus("live");
       });
-      setError(null);
-      setStatus("live");
-    } catch (fetchError) {
-      setError(
-        fetchError instanceof Error ? fetchError.message : "Gagal memperbarui contract event"
-      );
-      setStatus("error");
-    } finally {
-      runningRef.current = false;
-    }
-  }, []);
 
-  useEffect(() => {
-    const initial = window.setTimeout(() => void fetchEvents(), 0);
-    const interval = window.setInterval(() => void fetchEvents(), 5_000);
-    return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(interval);
+      source.addEventListener("contract-events", (message) => {
+        const batch = JSON.parse((message as MessageEvent<string>).data) as EventBatch;
+        cursorRef.current = batch.cursor;
+        setLatestLedger(batch.latestLedger);
+        setContractCount(batch.monitoredContracts.length);
+        setEvents((current) => {
+          const merged = new Map(current.map((event) => [event.id, event]));
+          for (const event of batch.events) merged.set(event.id, event);
+          return Array.from(merged.values())
+            .sort((a, b) => b.ledger - a.ledger || b.id.localeCompare(a.id))
+            .slice(0, 8);
+        });
+        setError(null);
+        setStatus("live");
+      });
+
+      source.addEventListener("stream-error", (message) => {
+        const payload = JSON.parse((message as MessageEvent<string>).data) as { error?: string };
+        setError(payload.error ?? "Event stream Testnet tidak tersedia");
+        setStatus("error");
+      });
+
+      source.addEventListener("reconnect", () => {
+        source?.close();
+        scheduleReconnect();
+      });
+
+      source.onerror = () => {
+        source?.close();
+        if (stopped) return;
+        setStatus("error");
+        setError((current) => current ?? "Koneksi event terputus. Menghubungkan ulang...");
+        scheduleReconnect();
+      };
     };
-  }, [fetchEvents]);
+
+    connect();
+    return () => {
+      stopped = true;
+      source?.close();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+    };
+  }, [generation]);
+
+  const resetStream = () => {
+    cursorRef.current = null;
+    setEvents([]);
+    setError(null);
+    setStatus("connecting");
+    setGeneration((current) => current + 1);
+  };
 
   return (
     <Card data-testid="contract-event-feed">
@@ -98,7 +131,7 @@ export function ContractEventFeed() {
             Live Contract Events
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Soroban RPC cursor · refresh otomatis setiap 5 detik
+            Server-Sent Events · cursor Soroban RPC real-time
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -111,13 +144,13 @@ export function ContractEventFeed() {
                 status === "live" ? "animate-pulse bg-emerald-500" : "bg-current"
               }`}
             />
-            {status === "live" ? "Live" : status === "error" ? "Retrying" : "Connecting"}
+            {status === "live" ? "Live" : status === "error" ? "Reconnecting" : "Connecting"}
           </Badge>
           <Button
             variant="ghost"
             size="icon"
             aria-label="Refresh contract events"
-            onClick={() => void fetchEvents(true)}
+            onClick={resetStream}
           >
             <RefreshCw className="size-4" />
           </Button>
@@ -125,7 +158,10 @@ export function ContractEventFeed() {
       </CardHeader>
       <CardContent>
         {error ? (
-          <div role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800"
+          >
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
             <span>{error}</span>
           </div>

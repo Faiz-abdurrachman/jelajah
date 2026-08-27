@@ -34,52 +34,88 @@ test.describe("Level 2 multi-wallet and contract events", () => {
   });
 
   test("renders new Soroban events with a visible confirmed transaction state", async ({ page }) => {
-    await page.route("**/api/stellar/events**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          cursor: "0000436000-0000000000",
-          latestLedger: 4_360_000,
-          monitoredContracts: ["CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55"],
-          events: [
-            {
-              id: "0000435999-0000000001",
-              name: "hunt_created",
-              contractId: "CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55",
-              ledger: 4_359_999,
-              closedAt: "2026-08-27T10:00:00Z",
-              txHash: "a".repeat(64),
-              successful: true,
-            },
-          ],
-        }),
-      });
-    });
+    const batch = {
+      cursor: "0000436000-0000000000",
+      latestLedger: 4_360_000,
+      monitoredContracts: ["CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2"],
+      events: [
+        {
+          id: "0000435999-0000000001",
+          name: "hunt_created",
+          contractId: "CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2",
+          ledger: 4_359_999,
+          closedAt: "2026-08-27T10:00:00Z",
+          txHash: "a".repeat(64),
+          successful: true,
+        },
+        {
+          id: "0000435999-0000000002",
+          name: "xp_awarded",
+          contractId: "CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3",
+          ledger: 4_359_999,
+          closedAt: "2026-08-27T10:00:00Z",
+          txHash: "b".repeat(64),
+          successful: true,
+        },
+      ],
+    };
+    await page.addInitScript((eventBatch) => {
+      class MockEventSource extends EventTarget {
+        onerror: ((event: Event) => void) | null = null;
+
+        constructor() {
+          super();
+          window.setTimeout(() => {
+            this.dispatchEvent(new MessageEvent("connected", { data: "{}" }));
+            this.dispatchEvent(
+              new MessageEvent("contract-events", { data: JSON.stringify(eventBatch) })
+            );
+          }, 0);
+        }
+
+        close() {}
+      }
+
+      window.EventSource = MockEventSource as unknown as typeof EventSource;
+    }, batch);
 
     await page.goto("/wallet");
     const feed = page.getByTestId("contract-event-feed");
     await expect(feed.getByText("Live", { exact: true })).toBeVisible();
     await expect(feed.getByText("Hunt dibuat")).toBeVisible();
-    await expect(feed.getByText("Confirmed")).toBeVisible();
-    await expect(feed.getByRole("link", { name: /Lihat transaksi/ })).toHaveAttribute(
+    await expect(feed.getByText("XP diberikan")).toBeVisible();
+    await expect(feed.getByText("Confirmed")).toHaveCount(2);
+    await expect(feed.getByRole("link", { name: /Lihat transaksi/ }).first()).toHaveAttribute(
       "href",
       /stellar\.expert\/explorer\/testnet\/tx\//
     );
   });
 
   test("keeps the live feed recoverable when Stellar RPC fails", async ({ page }) => {
-    await page.route("**/api/stellar/events**", async (route) => {
-      await route.fulfill({
-        status: 502,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "RPC Testnet sementara tidak tersedia" }),
-      });
+    await page.addInitScript(() => {
+      class MockEventSource extends EventTarget {
+        onerror: ((event: Event) => void) | null = null;
+
+        constructor() {
+          super();
+          window.setTimeout(() => {
+            this.dispatchEvent(
+              new MessageEvent("stream-error", {
+                data: JSON.stringify({ error: "RPC Testnet sementara tidak tersedia" }),
+              })
+            );
+          }, 0);
+        }
+
+        close() {}
+      }
+
+      window.EventSource = MockEventSource as unknown as typeof EventSource;
     });
 
     await page.goto("/wallet");
     const feed = page.getByTestId("contract-event-feed");
-    await expect(feed.getByText("Retrying")).toBeVisible();
+    await expect(feed.getByText("Reconnecting")).toBeVisible();
     await expect(feed.getByRole("alert")).toContainText("RPC Testnet sementara tidak tersedia");
     await expect(feed.getByRole("button", { name: "Refresh contract events" })).toBeVisible();
   });
