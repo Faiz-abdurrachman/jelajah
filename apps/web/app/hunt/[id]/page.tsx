@@ -7,7 +7,8 @@ import { ClaimHuntView } from "@/components/hunt/claim-hunt-view";
 import { HiderApproveView } from "@/components/hunt/hider-approve-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Scale } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DatabaseZap, Map, RefreshCw, Scale } from "lucide-react";
 import Link from "next/link";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { getHuntById } from "@/lib/supabase/client";
@@ -21,6 +22,7 @@ export default function HuntDetailPage() {
   const [hunt, setHunt] = useState<Hunt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,9 +46,13 @@ export default function HuntDetailPage() {
         } else {
           setError("Hunt tidak ditemukan.");
         }
-      } catch {
+      } catch (loadError) {
         if (!cancelled) {
-          setError("Gagal memuat data hunt.");
+          setError(
+            loadError instanceof Error && loadError.message.includes("Supabase browser credentials")
+              ? "Index database belum dikonfigurasi pada deployment ini. Data dan escrow on-chain tetap aman."
+              : "Index data hunt sedang tidak tersedia. Coba lagi beberapa saat."
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -55,7 +61,7 @@ export default function HuntDetailPage() {
 
     void load();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, reloadKey]);
 
   const handleClaimResolved = () => {
     // Re-fetch hunt data after a claim is approved/rejected
@@ -76,18 +82,40 @@ export default function HuntDetailPage() {
     <RequireLevel level={2}>
       <div className="container max-w-2xl mx-auto py-8 px-4">
         {loading ? (
-          <div className="space-y-4 animate-pulse">
+          <div data-testid="hunt-detail-state" className="space-y-4 animate-pulse">
             <div className="h-8 w-48 bg-muted rounded" />
             <div className="h-64 bg-muted rounded-lg" />
           </div>
         ) : error ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">{error}</p>
+          <Card data-testid="hunt-detail-state" role="alert">
+            <CardContent className="flex flex-col items-center py-12 text-center">
+              <DatabaseZap className="mb-3 size-8 text-amber-600" />
+              <h1 className="text-lg font-semibold">Data hunt belum tersedia</h1>
+              <p className="mt-2 max-w-md text-sm text-muted-foreground">{error}</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setError(null);
+                    setLoading(true);
+                    setReloadKey((current) => current + 1);
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  Coba lagi
+                </Button>
+                <Link
+                  href="/map"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+                >
+                  <Map className="size-4" />
+                  Lihat peta
+                </Link>
+              </div>
             </CardContent>
           </Card>
         ) : hunt ? (
-          <div className="space-y-6">
+          <div data-testid="hunt-detail-state" className="space-y-6">
             <HuntInfoCard hunt={hunt} />
             {isHider && (
               <HiderApproveView hunt={hunt} onClaimResolved={handleClaimResolved} />

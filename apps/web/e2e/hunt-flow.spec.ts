@@ -36,7 +36,7 @@ test.describe("Hunt Detail Page", () => {
     await page.goto("/hunt/1");
     await expect(page).toHaveURL(/\/hunt\/1/);
 
-    // Should show hunt content or loading skeleton
-    await expect(page.locator(".animate-pulse, button:has-text('GPS')").first()).toBeVisible({ timeout: 15000 });
+    // Content, loading, or an actionable degraded state must always render.
+    await expect(page.getByTestId("hunt-detail-state")).toBeVisible({ timeout: 15000 });
   });
 });
