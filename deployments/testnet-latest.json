@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-08-27T17:12:06Z",
+  "network": "testnet",
+  "git_commit": "62f2f92acef173bfa0960e199fead063d09f9197",
+  "admin_address": "GBHTONLOIPXNGOZMWUB23UHVVYN6J54HJ4OBMREPMNEUHQIANWC3GPEQ",
+  "asset_contract": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "wasm": {
+    "hunt_instance": {
+      "ledger_hash": "e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540",
+      "local_sha256": "e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540"
+    },
+    "reputation": {
+      "ledger_hash": "70f5c295fa8aa0baccd76cd642bdf09648c3f62db8b295c68acee46ae388e242",
+      "local_sha256": "70f5c295fa8aa0baccd76cd642bdf09648c3f62db8b295c68acee46ae388e242"
+    },
+    "hunt_factory": {
+      "ledger_hash": "eb3a5aa14ad27c902735b6ed07cb6e79bfa74be40057d1dd0835011107a54fe3",
+      "local_sha256": "eb3a5aa14ad27c902735b6ed07cb6e79bfa74be40057d1dd0835011107a54fe3"
+    }
+  },
+  "contracts": {
+    "reputation": "CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3",
+    "hunt_factory": "CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2"
+  },
+  "configuration_transaction_hash": "3848842643579bff43e267671682956acb6607fea557fa6e03307e3f8ab2a8b9"
+}
