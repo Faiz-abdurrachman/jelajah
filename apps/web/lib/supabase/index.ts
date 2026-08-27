@@ -1,5 +1,5 @@
 export {
-  supabase,
+  getSupabaseBrowserClient,
   getOrCreateUser,
   getActiveHunts,
   getUserHunts,

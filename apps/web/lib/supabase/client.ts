@@ -1,21 +1,31 @@
 // JELAJAH — Supabase Client
 // Singleton client untuk koneksi ke Supabase PostgreSQL
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+let browserClient: SupabaseClient | null = null;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    "[JELAJAH] Supabase credentials not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local"
-  );
-}
+/**
+ * Create the browser client only when a data helper is actually used.
+ *
+ * Client components are evaluated while Next.js prerenders pages. Keeping the
+ * constructor lazy lets CI build the application without production secrets,
+ * while still failing with an actionable error if a data-backed feature is
+ * opened without its runtime configuration.
+ */
+export function getSupabaseBrowserClient(): SupabaseClient {
+  if (browserClient) return browserClient;
 
-export const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Supabase browser credentials are not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."
+    );
+  }
+
+  browserClient = createClient(supabaseUrl, supabaseAnonKey, {
     realtime: {
       params: {
         eventsPerSecond: 10,
@@ -24,8 +34,10 @@ export const supabase = createClient(
     db: {
       schema: "public",
     },
-  }
-);
+  });
+
+  return browserClient;
+}
 
 // ─── Helper Queries ───────────────────────────────────
 
@@ -36,6 +48,8 @@ import type { User, Hunt, Notification, Verifier, Brand } from "@/types";
  * Upsert pattern: insert if not exists, return existing if found.
  */
 export async function getOrCreateUser(publicKey: string): Promise<User | null> {
+  const supabase = getSupabaseBrowserClient();
+
   // Try to get existing
   const { data: existing } = await supabase
     .from("users")
@@ -59,6 +73,8 @@ export async function getOrCreateUser(publicKey: string): Promise<User | null> {
  * Get active hunts (not expired) for map display.
  */
 export async function getActiveHunts() {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("hunts")
     .select("*, hider:users!hunts_hider_pubkey_fkey(*)")
@@ -73,6 +89,8 @@ export async function getActiveHunts() {
  * Get a single hunt by ID with hider info.
  */
 export async function getHuntById(huntId: number) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("hunts")
     .select("*, hider:users!hunts_hider_pubkey_fkey(*)")
@@ -90,6 +108,8 @@ export async function getUserHunts(
   limit = 10,
   offset = 0
 ) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("hunts")
     .select("*")
@@ -108,6 +128,8 @@ export async function getUserClaims(
   limit = 10,
   offset = 0
 ) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("claims")
     .select("*, hunt:hunts(*)")
@@ -122,6 +144,8 @@ export async function getUserClaims(
  * Subscribe to new hunts in realtime.
  */
 export function subscribeToNewHunts(callback: (hunt: Hunt) => void) {
+  const supabase = getSupabaseBrowserClient();
+
   return supabase
     .channel("hunts-realtime")
     .on(
@@ -146,6 +170,8 @@ export function subscribeToNotifications(
   publicKey: string,
   callback: (notification: Notification) => void
 ) {
+  const supabase = getSupabaseBrowserClient();
+
   return supabase
     .channel(`notifications-${publicKey}`)
     .on(
@@ -169,6 +195,8 @@ export function subscribeToNotifications(
  * Get all quest-type hunts (multi-step).
  */
 export async function getAllQuests() {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("hunts")
     .select("*, hider:users!hunts_hider_pubkey_fkey(*)")
@@ -182,6 +210,8 @@ export async function getAllQuests() {
  * Get disputes assigned to a verifier or all disputes.
  */
 export async function getDisputes(verifierPubkey?: string) {
+  const supabase = getSupabaseBrowserClient();
+
   let query = supabase
     .from("disputes")
     .select("*, claim:claims(*, hunt:hunts(*))")
@@ -199,6 +229,8 @@ export async function getDisputes(verifierPubkey?: string) {
  * Get verifier stats for dashboard.
  */
 export async function getVerifierStats(publicKey: string) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("verifiers")
     .select("*")
@@ -212,6 +244,8 @@ export async function getVerifierStats(publicKey: string) {
  * Get leaderboard data — top hunters by reputation score.
  */
 export async function getLeaderboard(limit = 50) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("users")
     .select("*")
@@ -225,6 +259,8 @@ export async function getLeaderboard(limit = 50) {
  * Get community activities feed.
  */
 export async function getCommunityActivities(limit = 30) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("community_activities")
     .select("*")
@@ -238,6 +274,8 @@ export async function getCommunityActivities(limit = 30) {
  * Check if a user is registered as a brand.
  */
 export async function getBrandProfile(publicKey: string) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("brands")
     .select("*")
@@ -251,6 +289,8 @@ export async function getBrandProfile(publicKey: string) {
  * Register a new brand.
  */
 export async function registerBrand(publicKey: string, companyName: string) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data, error } = await supabase
     .from("brands")
     .insert({
@@ -271,6 +311,8 @@ export async function registerBrand(publicKey: string, companyName: string) {
  * Register a user as a verifier.
  */
 export async function applyAsVerifier(publicKey: string) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data, error } = await supabase
     .from("verifiers")
     .insert({ public_key: publicKey, stake: 0, disputes_handled: 0, dispute_fee_earned: 0, is_active: true })
@@ -285,6 +327,8 @@ export async function applyAsVerifier(publicKey: string) {
  * Subscribe to community activities in realtime.
  */
 export function subscribeToCommunityActivities(callback: (activity: Record<string, unknown>) => void) {
+  const supabase = getSupabaseBrowserClient();
+
   return supabase
     .channel("community-activities")
     .on(
@@ -312,6 +356,8 @@ export async function insertHunt(params: {
   deadline: string;
   photoCid?: string | null;
 }): Promise<number> {
+  const supabase = getSupabaseBrowserClient();
+
   const { data, error } = await supabase
     .from("hunts")
     .insert({
@@ -345,6 +391,8 @@ export async function insertClaim(params: {
   gpsLng: number;
   txHash: string;
 }): Promise<number> {
+  const supabase = getSupabaseBrowserClient();
+
   const { data, error } = await supabase
     .from("claims")
     .insert({
@@ -366,6 +414,8 @@ export async function insertClaim(params: {
  * Update claim status (approve/reject by hider).
  */
 export async function updateClaimStatus(claimId: number, status: "approved" | "rejected"): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+
   const { error } = await supabase
     .from("claims")
     .update({ status, resolved_at: new Date().toISOString() })
@@ -385,6 +435,8 @@ export async function createCampaign(params: {
   startDate: string;
   endDate: string;
 }): Promise<number> {
+  const supabase = getSupabaseBrowserClient();
+
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
@@ -407,6 +459,8 @@ export async function createCampaign(params: {
  * Get pending claims for a specific hunt (hider view).
  */
 export async function getPendingClaims(huntId: number) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("claims")
     .select("*, hunter:users!claims_hunter_pubkey_fkey(*)")
@@ -421,6 +475,8 @@ export async function getPendingClaims(huntId: number) {
  * Get all claims for a specific hunt.
  */
 export async function getClaimsByHunt(huntId: number) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("claims")
     .select("*, hunter:users!claims_hunter_pubkey_fkey(*)")
@@ -438,6 +494,8 @@ export async function insertDispute(params: {
   huntId: number;
   reason: string;
 }): Promise<number> {
+  const supabase = getSupabaseBrowserClient();
+
   const { data, error } = await supabase
     .from("disputes")
     .insert({
@@ -457,6 +515,8 @@ export async function insertDispute(params: {
  * Get all disputes for a specific hunt.
  */
 export async function getDisputesByHunt(huntId: number) {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("disputes")
     .select("*, claim:claims(*)")
@@ -470,6 +530,8 @@ export async function getDisputesByHunt(huntId: number) {
  * Get active verifiers for dispute assignment.
  */
 export async function getActiveVerifiers() {
+  const supabase = getSupabaseBrowserClient();
+
   const { data } = await supabase
     .from("verifiers")
     .select("*")
@@ -478,4 +540,3 @@ export async function getActiveVerifiers() {
 
   return data ?? [];
 }
-
