@@ -1,0 +1,50 @@
+name: Deploy contracts to Testnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY TESTNET to authorize an on-chain deployment
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.confirmation == 'DEPLOY TESTNET' }}
+    runs-on: ubuntu-latest
+    environment: testnet
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Install verified Stellar CLI
+        uses: stellar/stellar-cli@v27.0.0
+
+      - name: Deploy and verify inter-contract set
+        env:
+          STELLAR_NETWORK: testnet
+          STELLAR_ACCOUNT: ${{ secrets.STELLAR_TESTNET_SECRET_KEY }}
+          STELLAR_ADMIN_ADDRESS: ${{ secrets.STELLAR_TESTNET_PUBLIC_KEY }}
+          DEPLOY_MANIFEST_PATH: ${{ runner.temp }}/jelajah-testnet-deployment.json
+        run: ./scripts/deploy-contracts.sh
+
+      - name: Upload deployment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: jelajah-testnet-deployment-${{ github.sha }}
+          path: ${{ runner.temp }}/jelajah-testnet-deployment.json
+          if-no-files-found: error
+          retention-days: 90
