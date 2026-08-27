@@ -7,9 +7,8 @@ use soroban_sdk::{
     token::{StellarAssetClient, TokenClient},
 };
 
-const INSTANCE_WASM: &[u8] = include_bytes!(
-    "../../target/wasm32v1-none/release/hunt_instance.wasm"
-);
+const INSTANCE_WASM: &[u8] =
+    include_bytes!("../../target/wasm32v1-none/release/hunt_instance.wasm");
 const START_TIME: u64 = 1_000;
 const DEADLINE: u64 = START_TIME + 7 * 24 * 60 * 60;
 const REWARD: i128 = 50_000_000;
@@ -19,12 +18,39 @@ const REWARD: i128 = 50_000_000;
 trait InstanceInterface {
     fn get_escrow_balance(env: Env) -> i128;
     fn get_hider(env: Env) -> Address;
+    fn get_reputation(env: Env) -> Address;
+}
+
+#[derive(Clone)]
+#[contracttype]
+enum ReputationDataKey {
+    Hunt(BytesN<32>),
+}
+
+#[contract]
+struct MockReputation;
+
+#[contractimpl]
+impl MockReputation {
+    pub fn register_hunt(env: Env, caller: Address, hunt_id: BytesN<32>, instance: Address) {
+        caller.require_auth();
+        let key = ReputationDataKey::Hunt(hunt_id);
+        assert!(!env.storage().instance().has(&key));
+        env.storage().instance().set(&key, &instance);
+    }
+
+    pub fn get_hunt_instance(env: Env, hunt_id: BytesN<32>) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&ReputationDataKey::Hunt(hunt_id))
+    }
 }
 
 struct Fixture {
     env: Env,
     factory: Address,
     asset: Address,
+    reputation: Address,
     hider: Address,
 }
 
@@ -38,16 +64,21 @@ impl Fixture {
         let hider = Address::generate(&env);
         let stellar_asset = env.register_stellar_asset_contract_v2(asset_admin);
         let asset = stellar_asset.address();
+        let reputation = env.register(MockReputation, ());
         StellarAssetClient::new(&env, &asset).mint(&hider, &(REWARD * 3));
 
         let wasm = soroban_sdk::Bytes::from_slice(&env, INSTANCE_WASM);
         let instance_wasm_hash = env.deployer().upload_contract_wasm(wasm);
-        let factory = env.register(HuntFactory, (instance_wasm_hash, asset.clone()));
+        let factory = env.register(
+            HuntFactory,
+            (instance_wasm_hash, asset.clone(), reputation.clone()),
+        );
 
         Self {
             env,
             factory,
             asset,
+            reputation,
             hider,
         }
     }
@@ -78,8 +109,12 @@ fn create_hunt_deploys_instance_and_funds_escrow_atomically() {
     assert_eq!(stored.instance, instance);
     assert_eq!(stored.asset, fixture.asset);
     assert_eq!(stored.amount, REWARD);
+    assert_eq!(stored.reputation, fixture.reputation);
     assert_eq!(fixture.client().get_hunt_count(), 1);
-    assert_eq!(fixture.client().get_instance(&hunt_id), Some(instance.clone()));
+    assert_eq!(
+        fixture.client().get_instance(&hunt_id),
+        Some(instance.clone())
+    );
     assert_eq!(
         TokenClient::new(&fixture.env, &fixture.asset).balance(&fixture.hider),
         REWARD * 2
@@ -88,6 +123,12 @@ fn create_hunt_deploys_instance_and_funds_escrow_atomically() {
     let instance_client = InstanceClient::new(&fixture.env, &instance);
     assert_eq!(instance_client.get_hider(), fixture.hider);
     assert_eq!(instance_client.get_escrow_balance(), REWARD);
+    assert_eq!(instance_client.get_reputation(), fixture.reputation);
+    assert_eq!(
+        MockReputationClient::new(&fixture.env, &fixture.reputation).get_hunt_instance(&hunt_id),
+        Some(instance)
+    );
+    assert_eq!(fixture.client().get_reputation(), fixture.reputation);
 }
 
 #[test]
@@ -134,8 +175,7 @@ fn duplicate_id_does_not_deploy_or_charge_twice() {
 #[test]
 fn unsupported_hunt_type_is_rejected_before_funds_move() {
     let fixture = Fixture::new();
-    let initial_balance =
-        TokenClient::new(&fixture.env, &fixture.asset).balance(&fixture.hider);
+    let initial_balance = TokenClient::new(&fixture.env, &fixture.asset).balance(&fixture.hider);
 
     assert_eq!(
         fixture.client().try_create_hunt(

@@ -1,8 +1,10 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, token::TokenClient,
-    Address, BytesN, Env, MuxedAddress,
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
+    token::TokenClient,
+    vec, Address, BytesN, Env, IntoVal, MuxedAddress, Symbol,
 };
 
 mod event;
@@ -10,6 +12,12 @@ mod event;
 const TTL_THRESHOLD_LEDGERS: u32 = 100_000;
 const TTL_EXTEND_TO_LEDGERS: u32 = 2_000_000;
 const GPS_SCALE: i64 = 10_000_000;
+
+#[contractclient(name = "ReputationClient")]
+#[allow(dead_code)]
+trait ReputationInterface {
+    fn register_hunt(env: Env, caller: Address, hunt_id: BytesN<32>, instance: Address);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[contracterror]
@@ -36,6 +44,7 @@ pub struct Hunt {
     pub deadline: u64,
     pub clue_hash: BytesN<32>,
     pub hunt_type: u32,
+    pub reputation: Address,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,6 +53,7 @@ enum DataKey {
     Count,
     InstanceWasmHash,
     Asset,
+    Reputation,
     Hunt(BytesN<32>),
 }
 
@@ -52,11 +62,19 @@ pub struct HuntFactory;
 
 #[contractimpl]
 impl HuntFactory {
-    pub fn __constructor(env: Env, instance_wasm_hash: BytesN<32>, asset: Address) {
+    pub fn __constructor(
+        env: Env,
+        instance_wasm_hash: BytesN<32>,
+        asset: Address,
+        reputation: Address,
+    ) {
         env.storage()
             .instance()
             .set(&DataKey::InstanceWasmHash, &instance_wasm_hash);
         env.storage().instance().set(&DataKey::Asset, &asset);
+        env.storage()
+            .instance()
+            .set(&DataKey::Reputation, &reputation);
         env.storage().instance().set(&DataKey::Count, &0_u32);
         Self::bump_ttl(&env);
     }
@@ -76,15 +94,7 @@ impl HuntFactory {
     ) -> Address {
         hider.require_auth();
         Self::bump_ttl(&env);
-        Self::validate_hunt(
-            &env,
-            amount,
-            gps_lat,
-            gps_lng,
-            radius,
-            deadline,
-            hunt_type,
-        );
+        Self::validate_hunt(&env, amount, gps_lat, gps_lng, radius, deadline, hunt_type);
 
         let hunt_key = DataKey::Hunt(hunt_id.clone());
         if env.storage().instance().has(&hunt_key) {
@@ -100,6 +110,11 @@ impl HuntFactory {
             .storage()
             .instance()
             .get(&DataKey::Asset)
+            .expect("factory is not configured");
+        let reputation: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Reputation)
             .expect("factory is not configured");
 
         let instance = env
@@ -118,8 +133,11 @@ impl HuntFactory {
                     deadline,
                     clue_hash.clone(),
                     hunt_type,
+                    reputation.clone(),
                 ),
             );
+
+        Self::register_reputation_hunt(&env, &reputation, &hunt_id, &instance);
 
         let destination = MuxedAddress::from(&instance);
         TokenClient::new(&env, &asset).transfer(&hider, &destination, &amount);
@@ -136,14 +154,11 @@ impl HuntFactory {
             deadline,
             clue_hash,
             hunt_type,
+            reputation,
         };
         env.storage().instance().set(&hunt_key, &hunt);
 
-        let count: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Count)
-            .unwrap_or(0);
+        let count: u32 = env.storage().instance().get(&DataKey::Count).unwrap_or(0);
         env.storage()
             .instance()
             .set(&DataKey::Count, &count.saturating_add(1));
@@ -163,10 +178,7 @@ impl HuntFactory {
 
     pub fn get_hunt_count(env: Env) -> u32 {
         Self::bump_ttl(&env);
-        env.storage()
-            .instance()
-            .get(&DataKey::Count)
-            .unwrap_or(0)
+        env.storage().instance().get(&DataKey::Count).unwrap_or(0)
     }
 
     pub fn get_hunt(env: Env, hunt_id: BytesN<32>) -> Option<Hunt> {
@@ -186,6 +198,41 @@ impl HuntFactory {
             .instance()
             .get(&DataKey::Asset)
             .expect("factory is not configured")
+    }
+
+    pub fn get_reputation(env: Env) -> Address {
+        Self::bump_ttl(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::Reputation)
+            .expect("factory is not configured")
+    }
+
+    fn register_reputation_hunt(
+        env: &Env,
+        reputation: &Address,
+        hunt_id: &BytesN<32>,
+        instance: &Address,
+    ) {
+        let caller = env.current_contract_address();
+        env.authorize_as_current_contract(vec![
+            env,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: reputation.clone(),
+                    fn_name: Symbol::new(env, "register_hunt"),
+                    args: vec![
+                        env,
+                        caller.clone().into_val(env),
+                        hunt_id.clone().into_val(env),
+                        instance.clone().into_val(env),
+                    ],
+                },
+                sub_invocations: vec![env],
+            }),
+        ]);
+
+        ReputationClient::new(env, reputation).register_hunt(&caller, hunt_id, instance);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -213,9 +260,7 @@ impl HuntFactory {
 
         let max_lat = 90 * GPS_SCALE;
         let max_lng = 180 * GPS_SCALE;
-        if !(-max_lat..=max_lat).contains(&gps_lat)
-            || !(-max_lng..=max_lng).contains(&gps_lng)
-        {
+        if !(-max_lat..=max_lat).contains(&gps_lat) || !(-max_lng..=max_lng).contains(&gps_lng) {
             panic_with_error!(env, ContractError::InvalidCoordinates);
         }
     }
