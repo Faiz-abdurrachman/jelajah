@@ -12,6 +12,7 @@ soroban-sdk.workspace = true
 
 [features]
 factory-integration = []
+full-integration = ["factory-integration"]
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
