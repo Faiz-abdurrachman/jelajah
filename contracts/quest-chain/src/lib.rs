@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
+    Vec,
 };
 
 // ─── Error Codes ──────────────────────────────────────
@@ -47,9 +48,15 @@ pub struct QuestChain;
 impl QuestChain {
     pub fn set_quest_steps(env: Env, quest_id: BytesN<32>, hider: Address, steps: Vec<QuestStep>) {
         hider.require_auth();
-        env.storage().instance().set(&DataKey::Steps(quest_id.clone()), &steps);
-        env.storage().instance().set(&DataKey::QuestHider(quest_id.clone()), &hider);
-        env.storage().instance().set(&DataKey::QuestStatus(quest_id), &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::Steps(quest_id.clone()), &steps);
+        env.storage()
+            .instance()
+            .set(&DataKey::QuestHider(quest_id.clone()), &hider);
+        env.storage()
+            .instance()
+            .set(&DataKey::QuestStatus(quest_id), &0u32);
     }
 
     pub fn complete_step(
@@ -61,11 +68,15 @@ impl QuestChain {
     ) {
         hunter.require_auth();
 
-        let steps: Vec<QuestStep> = env.storage().instance()
+        let steps: Vec<QuestStep> = env
+            .storage()
+            .instance()
             .get(&DataKey::Steps(quest_id.clone()))
             .expect("quest not found");
 
-        let current_step: u32 = env.storage().instance()
+        let current_step: u32 = env
+            .storage()
+            .instance()
             .get(&DataKey::CurrentStep(quest_id.clone(), hunter.clone()))
             .unwrap_or(0);
 
@@ -78,7 +89,9 @@ impl QuestChain {
             panic_with_error!(&env, ContractError::StepNotFound);
         }
 
-        let mut completed: Vec<u32> = env.storage().instance()
+        let mut completed: Vec<u32> = env
+            .storage()
+            .instance()
             .get(&DataKey::CompletedSteps(quest_id.clone(), hunter.clone()))
             .unwrap_or(Vec::new(&env));
         completed.push_back(step);
@@ -95,7 +108,8 @@ impl QuestChain {
     }
 
     pub fn get_current_step(env: Env, quest_id: BytesN<32>, hunter: Address) -> u32 {
-        env.storage().instance()
+        env.storage()
+            .instance()
             .get(&DataKey::CurrentStep(quest_id, hunter))
             .unwrap_or(0)
     }
@@ -103,12 +117,16 @@ impl QuestChain {
     pub fn claim_quest(env: Env, quest_id: BytesN<32>, hunter: Address) {
         hunter.require_auth();
 
-        let steps: Vec<QuestStep> = env.storage().instance()
+        let steps: Vec<QuestStep> = env
+            .storage()
+            .instance()
             .get(&DataKey::Steps(quest_id.clone()))
             .expect("quest not found");
 
         let last_step = steps.len() as u32 - 1;
-        let completed: Vec<u32> = env.storage().instance()
+        let completed: Vec<u32> = env
+            .storage()
+            .instance()
             .get(&DataKey::CompletedSteps(quest_id, hunter))
             .expect("no completed steps");
 
@@ -119,7 +137,8 @@ impl QuestChain {
     }
 
     pub fn get_steps(env: Env, quest_id: BytesN<32>) -> Vec<QuestStep> {
-        env.storage().instance()
+        env.storage()
+            .instance()
             .get(&DataKey::Steps(quest_id))
             .expect("quest not found")
     }
