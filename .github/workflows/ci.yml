@@ -56,19 +56,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32v1-none
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: contracts
 
+      - name: Rust formatting
+        run: cargo fmt --all -- --check
+
       - name: Check workspace
         run: cargo check --workspace --locked
+
+      - name: Test reputation access control and replay protection
+        run: cargo test -p reputation --locked
 
       - name: Test escrow state machine
         run: cargo test -p hunt-instance --locked
 
-      - name: Build instance WASM for factory integration
-        run: cargo build -p hunt-instance --target wasm32v1-none --release --locked
+      - name: Build production inter-contract WASMs
+        run: >-
+          cargo build --target wasm32v1-none --release --locked
+          -p hunt-instance -p hunt-factory -p reputation
 
-      - name: Test factory deployment and funding
-        run: cargo test -p hunt-factory --features factory-integration --locked
+      - name: Test full factory, escrow, and reputation flow
+        run: cargo test -p hunt-factory --features full-integration --locked
