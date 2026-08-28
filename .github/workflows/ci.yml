@@ -10,6 +10,7 @@ jobs:
   web:
     runs-on: ubuntu-latest
     env:
+      NEXT_PUBLIC_CURRENT_LEVEL: 3
       WALLET_SESSION_SECRET: ci-only-wallet-session-secret-32-characters
     defaults:
       run:
