@@ -2,38 +2,92 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Download, ExternalLink, LoaderCircle, Radio, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Download, LoaderCircle, Play, Radio, TriangleAlert } from "lucide-react";
 
-type PlaybackState = "loading" | "ready" | "buffering" | "error";
+type PlaybackState = "loading" | "switching" | "ready" | "buffering" | "error";
+
+const videoSources = [
+  {
+    id: "mp4",
+    label: "MP4",
+    src: "/demo/jelajah-level3-demo.mp4?v=20260828-2",
+    download: "/demo/jelajah-level3-demo.mp4",
+  },
+  {
+    id: "webm",
+    label: "WebM",
+    src: "/demo/jelajah-level3-demo.webm?v=20260828-2",
+    download: "/demo/jelajah-level3-demo.webm",
+  },
+] as const;
 
 const playbackCopy: Record<PlaybackState, string> = {
-  loading: "Memuat metadata video…",
+  loading: "Menyiapkan video…",
+  switching: "Format pertama belum siap, mencoba format cadangan…",
   ready: "Siap diputar",
   buffering: "Menyesuaikan koneksi…",
-  error: "Browser tidak dapat memutar source otomatis.",
+  error: "Browser belum dapat memutar kedua format.",
 };
 
 export default function DemoPage() {
   const [playbackState, setPlaybackState] = useState<PlaybackState>("loading");
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [reloadToken, setReloadToken] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const activeSource = videoSources[sourceIndex];
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const syncPlaybackState = () => {
-      if (video.error) setPlaybackState("error");
-      else if (video.readyState >= HTMLMediaElement.HAVE_METADATA) setPlaybackState("ready");
+    let settled = false;
+    let fallbackRequested = false;
+
+    const markReady = () => {
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      settled = true;
+      setPlaybackState("ready");
     };
 
-    syncPlaybackState();
-    video.addEventListener("loadedmetadata", syncPlaybackState);
-    video.addEventListener("canplay", syncPlaybackState);
-    return () => {
-      video.removeEventListener("loadedmetadata", syncPlaybackState);
-      video.removeEventListener("canplay", syncPlaybackState);
+    const tryFallback = () => {
+      if (fallbackRequested || settled || video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        markReady();
+        return;
+      }
+
+      fallbackRequested = true;
+      if (sourceIndex < videoSources.length - 1) {
+        setPlaybackState("switching");
+        setSourceIndex((current) => current + 1);
+      } else {
+        setPlaybackState("error");
+      }
     };
-  }, []);
+
+    const fallbackTimer = window.setTimeout(tryFallback, 5000);
+
+    video.addEventListener("loadeddata", markReady);
+    video.addEventListener("canplay", markReady);
+    video.addEventListener("error", tryFallback);
+    video.load();
+    markReady();
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      video.removeEventListener("loadeddata", markReady);
+      video.removeEventListener("canplay", markReady);
+      video.removeEventListener("error", tryFallback);
+    };
+  }, [reloadToken, sourceIndex]);
+
+  const selectSource = (nextSourceIndex: number) => {
+    if (nextSourceIndex === sourceIndex) {
+      setReloadToken((current) => current + 1);
+    } else {
+      setSourceIndex(nextSourceIndex);
+    }
+    setPlaybackState(nextSourceIndex > sourceIndex ? "switching" : "loading");
+  };
 
   return (
     <main className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-[#090d18] px-4 py-10 text-white sm:px-8 lg:py-16">
@@ -69,47 +123,54 @@ export default function DemoPage() {
       <section className="relative mx-auto mt-10 max-w-6xl overflow-hidden rounded-[28px] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,.55)]">
         <video
           ref={videoRef}
+          key={activeSource.id}
+          src={activeSource.src}
           className="aspect-video w-full bg-black object-contain"
           controls
           playsInline
           preload="metadata"
           poster="/screenshots/level-3/live-events-desktop.png"
-          onLoadedMetadata={() => setPlaybackState("ready")}
+          onLoadedData={() => setPlaybackState("ready")}
           onCanPlay={() => setPlaybackState("ready")}
           onWaiting={() => setPlaybackState("buffering")}
           onPlaying={() => setPlaybackState("ready")}
-          onError={() => setPlaybackState("error")}
-        >
-          <source src="/demo/jelajah-level3-demo.webm" type={'video/webm; codecs="vp8"'} />
-          <source src="/demo/jelajah-level3-demo.mp4" type="video/mp4" />
-          Browser kamu tidak mendukung video HTML5.
-        </video>
+        />
 
         <div className="flex flex-col gap-4 border-t border-white/10 bg-[#0d1322] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-300" aria-live="polite">
             {playbackState === "ready" && <CheckCircle2 className="size-4 text-emerald-400" />}
-            {(playbackState === "loading" || playbackState === "buffering") && (
+            {(playbackState === "loading" || playbackState === "switching" || playbackState === "buffering") && (
               <LoaderCircle className="size-4 animate-spin text-cyan-300" />
             )}
             {playbackState === "error" && <TriangleAlert className="size-4 text-amber-400" />}
-            {playbackCopy[playbackState]}
+            <span>
+              {playbackCopy[playbackState]}
+              {playbackState === "ready" && <span className="text-slate-500"> · {activeSource.label}</span>}
+            </span>
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {videoSources.map((source, index) => (
+              <button
+                key={source.id}
+                type="button"
+                onClick={() => selectSource(index)}
+                aria-pressed={sourceIndex === index}
+                className={`inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm transition ${
+                  sourceIndex === index
+                    ? "border-cyan-300/70 bg-cyan-300/10 text-cyan-200"
+                    : "border-white/15 text-slate-200 hover:border-cyan-300/70 hover:text-cyan-200"
+                }`}
+              >
+                <Play className="size-3.5" /> {source.label}
+              </button>
+            ))}
             <a
-              href="/demo/jelajah-level3-demo.mp4"
+              href={activeSource.download}
               download
               className="inline-flex h-9 items-center gap-2 rounded-full border border-white/15 px-4 text-sm text-slate-200 transition hover:border-cyan-300/70 hover:text-cyan-200"
             >
-              <Download className="size-4" /> Unduh MP4
-            </a>
-            <a
-              href="/demo/jelajah-level3-demo.webm"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-white/15 px-4 text-sm text-slate-200 transition hover:border-cyan-300/70 hover:text-cyan-200"
-            >
-              WebM <ExternalLink className="size-4" />
+              <Download className="size-4" /> Unduh {activeSource.label}
             </a>
           </div>
         </div>
