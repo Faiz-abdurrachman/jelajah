@@ -11,7 +11,7 @@
 
 Live production demo: **[https://jelajah-stellar.vercel.app](https://jelajah-stellar.vercel.app)**
 
-Level 3 demo video (1 minute 29 seconds): **[Watch video](https://jelajah-stellar.vercel.app/demo/jelajah-level3-demo.webm)**
+Level 3 demo video (1 minute 29 seconds): **[Watch video](https://jelajah-stellar.vercel.app/demo/jelajah-level3-demo.mp4)**
 
 ---
 

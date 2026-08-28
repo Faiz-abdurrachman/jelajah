@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { spawn } from "node:child_process";
 import { mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -6,8 +7,20 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDirectory, "..");
 const rawDirectory = path.join(webRoot, "public", "demo", "raw");
-const outputPath = path.join(webRoot, "public", "demo", "jelajah-level3-demo.webm");
+const rawOutputPath = path.join(webRoot, "public", "demo", "jelajah-level3-demo.raw.webm");
+const outputPath = path.join(webRoot, "public", "demo", "jelajah-level3-demo.mp4");
 const liveUrl = process.env.DEMO_BASE_URL ?? "https://jelajah-stellar.vercel.app";
+
+function run(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: "inherit" });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} exited with code ${code}`));
+    });
+  });
+}
 
 await rm(rawDirectory, { recursive: true, force: true });
 await mkdir(rawDirectory, { recursive: true });
@@ -123,7 +136,29 @@ if (!video) {
   throw new Error("Playwright did not create a video artifact");
 }
 
-await rm(outputPath, { force: true });
-await rename(await video.path(), outputPath);
+await rm(rawOutputPath, { force: true });
+await rename(await video.path(), rawOutputPath);
 await rm(rawDirectory, { recursive: true, force: true });
+
+await rm(outputPath, { force: true });
+await run("ffmpeg", [
+  "-hide_banner",
+  "-loglevel",
+  "warning",
+  "-y",
+  "-i",
+  rawOutputPath,
+  "-c:v",
+  "libx264",
+  "-preset",
+  "medium",
+  "-crf",
+  "24",
+  "-pix_fmt",
+  "yuv420p",
+  "-movflags",
+  "+faststart",
+  outputPath,
+]);
+await rm(rawOutputPath, { force: true });
 console.log(outputPath);

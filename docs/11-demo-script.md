@@ -6,6 +6,8 @@ Target durasi: 1–2 menit. Recorder visual dapat dijalankan dari `apps/web` den
 node scripts/record-level3-demo.mjs
 ```
 
+Recorder membutuhkan `ffmpeg` untuk menghasilkan MP4 H.264 dengan metadata `faststart`, sehingga video dapat diputar dan di-seek secara konsisten dari browser.
+
 ## Narasi opsional
 
 1. **Intro** — “JELAJAH adalah platform treasure hunt dunia nyata di Stellar Testnet. Hider mengunci XLM, hunter mengirim bukti, dan payout diselesaikan on-chain.”
