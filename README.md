@@ -6,9 +6,10 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7B61FF?logo=stellar)](https://stellar.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase)](https://supabase.com/)
-[![CI](https://img.shields.io/badge/CI-12_contract_%2B_23_web_tests-success)](.github/workflows/ci.yml)
+[![CI](https://github.com/Faiz-abdurrachman/jelajah/actions/workflows/ci.yml/badge.svg)](https://github.com/Faiz-abdurrachman/jelajah/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/demo-Vercel-black?logo=vercel)](https://jelajah-stellar.vercel.app)
 
-JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, wallet Freighter, dan escrow Soroban. Versi yang aktif saat ini adalah **MVP Level 2: GPS Hunt di Stellar Testnet**.
+JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, multi-wallet, escrow Soroban, reputation XP on-chain, dan event streaming. Versi aktif adalah **MVP Level 3 di Stellar Testnet**.
 
 ## Status MVP
 
@@ -22,6 +23,10 @@ JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, wallet Freighter, dan 
 | Native XLM payment dengan Freighter | Terimplementasi |
 | Foto bukti IPFS melalui Pinata | Terimplementasi |
 | Index transaksi terverifikasi ke Supabase | Terimplementasi |
+| Factory → Instance → Reputation | Deployed dan terbukti end-to-end di Testnet |
+| Event Soroban real-time | Server-Sent Events dengan cursor, retry, dan reconnect |
+| CI + contract deployment workflow | Terimplementasi dan tervalidasi |
+| Live demo | [jelajah-stellar.vercel.app](https://jelajah-stellar.vercel.app) |
 | Quest, dispute, race, puzzle, dan photo hunt | Roadmap; belum aktif |
 | Mainnet | Belum |
 
@@ -33,12 +38,16 @@ JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, wallet Freighter, dan 
 flowchart LR
     H[Hider + Freighter] -->|create_hunt + XLM| F[Hunt Factory]
     F -->|deploy deterministik| I[Hunt Instance]
+    F -->|register hunt| REP[Reputation]
     I -->|menyimpan escrow| E[(Native XLM)]
     R[Hunter + GPS + foto] -->|submit_claim| I
     H -->|approve / reject| I
     I -->|approve atau auto-release| R
+    I -->|award XP setelah payout| REP
     API[Next.js API] -->|verifikasi transaksi final| RPC[Stellar RPC]
     API -->|index turunan| DB[(Supabase)]
+    RPC -->|cursor event| SSE[Next.js SSE stream]
+    SSE -->|push real-time| UI[Wallet event feed]
     R -->|upload terautentikasi| IPFS[Pinata / IPFS]
 ```
 
@@ -90,7 +99,7 @@ Seluruh screenshot berasal dari wallet dan transaksi Testnet nyata, bukan mock d
 | Contract deployed di Testnet | GPS Hunt Factory aktif dan dapat diverifikasi | Siap |
 | Contract dipanggil dari frontend | `create_hunt` ditandatangani wallet dan dikirim dari wizard | Siap |
 | Transaction status visible | Fase prepare, sign, submit, confirmation, hasil, hash, dan link explorer | Siap |
-| Real-time event integration | Polling cursor Soroban RPC setiap 5 detik dengan deduplikasi dan retry | Siap |
+| Real-time event integration | Cursor Soroban RPC dengan deduplikasi/retry; ditingkatkan menjadi SSE pada Level 3 | Siap |
 | Minimum 10 meaningful commits | Lebih dari 40 commit sebelum penambahan Level 2 | Siap |
 
 ### Level 2 Evidence
@@ -107,6 +116,51 @@ Seluruh screenshot berasal dari wallet dan transaksi Testnet nyata, bukan mock d
 - Live integration proof: the `hunt_created` event for the same hash is displayed by the wallet event feed.
 
 The Stellar ledger is the canonical source of transaction success. Supabase indexing is an idempotent, retryable secondary step, so an unavailable database never causes the UI to resend an already-confirmed escrow transaction.
+
+## Level 3 Submission
+
+Live demo: **[https://jelajah-stellar.vercel.app](https://jelajah-stellar.vercel.app)**
+
+| Requirement | Implementasi | Status |
+|---|---|---|
+| Advanced smart contract development | Escrow state machine, trusted registry, replay protection, checked XP arithmetic, TTL, typed events | Siap |
+| Inter-contract communication | Factory mendaftarkan instance ke Reputation; instance memberi XP hanya setelah payout | Siap |
+| Event streaming & real-time updates | Next.js SSE route menjaga cursor Soroban RPC, heartbeat, error, dan reconnect | Siap |
+| CI/CD pipeline | Web + contract CI, Vercel production deployment, manual guarded contract deployment | Siap |
+| Smart contract deployment workflow | Reproducible script, manual GitHub workflow, post-deploy verification, JSON manifest | Siap |
+| Mobile responsive frontend | Navbar, wallet, dan live event feed responsif | Siap |
+| Error handling & loading states | Wallet/RPC/contract/IPFS/database errors dan degraded database state | Siap |
+| Tests for contracts and frontend | 19 Rust tests + 23 Playwright tests | Siap |
+| Production-ready architecture | Canonical chain, secondary index, signed session, server-only secrets, atomic cross-contract flow | Siap untuk Testnet |
+| Documentation & demo | Architecture ADR, deployment manifest, explorer links, screenshots, live demo | Siap; video masih perlu direkam |
+
+### Production Testnet contracts
+
+| Component | Address / hash |
+|---|---|
+| HuntFactory | [`CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2`](https://stellar.expert/explorer/testnet/contract/CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2) |
+| Reputation | [`CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3`](https://stellar.expert/explorer/testnet/contract/CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3) |
+| Production proof instance | [`CC53OUXAOKQKUC6IXOGGKOV5M2WZXSBLPLHSCZM24F6GFZJY74JTHNA7`](https://stellar.expert/explorer/testnet/contract/CC53OUXAOKQKUC6IXOGGKOV5M2WZXSBLPLHSCZM24F6GFZJY74JTHNA7) |
+| HuntInstance WASM hash | `e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540` |
+| Reputation WASM hash | `70f5c295fa8aa0baccd76cd642bdf09648c3f62db8b295c68acee46ae388e242` |
+| HuntFactory WASM hash | `eb3a5aa14ad27c902735b6ed07cb6e79bfa74be40057d1dd0835011107a54fe3` |
+
+### Verifiable inter-contract transactions
+
+- Configure trusted factory: [`3848842643579bff43e267671682956acb6607fea557fa6e03307e3f8ab2a8b9`](https://stellar.expert/explorer/testnet/tx/3848842643579bff43e267671682956acb6607fea557fa6e03307e3f8ab2a8b9)
+- Create hunt + register instance + fund escrow: [`85a857117c66feab6b87ddbf3b6628be7618ada9d2f681f47fa2a29905ab976b`](https://stellar.expert/explorer/testnet/tx/85a857117c66feab6b87ddbf3b6628be7618ada9d2f681f47fa2a29905ab976b)
+- Submit claim: [`5e266455247ad0c0133f4fffa0fd313041c1318045c35611b7567013fd273442`](https://stellar.expert/explorer/testnet/tx/5e266455247ad0c0133f4fffa0fd313041c1318045c35611b7567013fd273442)
+- Approve + payout + award XP: [`619042c261559c4b0337657c3c8e7dc36df3b0cf9707eeba677b2b4836304c41`](https://stellar.expert/explorer/testnet/tx/619042c261559c4b0337657c3c8e7dc36df3b0cf9707eeba677b2b4836304c41)
+
+Final state was read back from Testnet: `Claimed`, escrow `0`, hunter XP `100`, and replay marker `true`. Full machine-readable evidence is in [`deployments/testnet-latest.json`](deployments/testnet-latest.json).
+
+### Level 3 screenshots
+
+| Live production SSE events | Mobile responsive SSE events |
+|---|---|
+| ![Production live contract events](apps/web/public/screenshots/level-3/live-events-desktop.png) | ![Mobile live contract events](apps/web/public/screenshots/level-3/mobile-live-events.png) |
+
+CI and test-output screenshots will be added from the first successful GitHub Actions run for this Level 3 commit set. The required 1–2 minute demo video must be recorded and linked by the submitter because it requires voice/screen narration.
 
 ## Tampilan
 
@@ -136,12 +190,13 @@ The Stellar ledger is the canonical source of transaction success. Supabase inde
 
 | Komponen | Address / hash |
 |---|---|
-| GPS Hunt Factory | [`CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55`](https://stellar.expert/explorer/testnet/contract/CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55) |
-| Hunt Instance WASM SHA-256 | `eee91c39c3700c63ad7a329738721b49a50722d9a000054ad876dca51d12dfce` |
+| GPS Hunt Factory L3 | [`CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2`](https://stellar.expert/explorer/testnet/contract/CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2) |
+| Reputation L3 | [`CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3`](https://stellar.expert/explorer/testnet/contract/CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3) |
+| Hunt Instance WASM SHA-256 | `e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| Live smoke-test instance | [`CCEX3DHRPFWFTDDTHPUJT7ZX7V2LZK53LLB477EDSNRTCQJELQZU3TRA`](https://stellar.expert/explorer/testnet/contract/CCEX3DHRPFWFTDDTHPUJT7ZX7V2LZK53LLB477EDSNRTCQJELQZU3TRA) |
+| Live proof instance | [`CC53OUXAOKQKUC6IXOGGKOV5M2WZXSBLPLHSCZM24F6GFZJY74JTHNA7`](https://stellar.expert/explorer/testnet/contract/CC53OUXAOKQKUC6IXOGGKOV5M2WZXSBLPLHSCZM24F6GFZJY74JTHNA7) |
 
-Smoke test final: create hunt dengan escrow 1 XLM → claim dari akun kedua → approve oleh hider → status `Claimed` → saldo escrow `0`.
+Smoke test final: create hunt dengan escrow `0.1 XLM` → register instance di Reputation → claim dari akun kedua → approve → payout + XP atomik → status `Claimed` → saldo escrow `0` → XP `100`.
 
 ## Menjalankan Secara Lokal
 
@@ -173,10 +228,11 @@ NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org
 NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org
 NEXT_PUBLIC_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 
-NEXT_PUBLIC_HUNT_FACTORY=CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55
-NEXT_PUBLIC_HUNT_INSTANCE_WASM_HASH=eee91c39c3700c63ad7a329738721b49a50722d9a000054ad876dca51d12dfce
+NEXT_PUBLIC_HUNT_FACTORY=CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2
+NEXT_PUBLIC_REPUTATION_CONTRACT=CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3
+NEXT_PUBLIC_HUNT_INSTANCE_WASM_HASH=e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540
 NEXT_PUBLIC_XLM_ASSET_CONTRACT=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
-NEXT_PUBLIC_CURRENT_LEVEL=2
+NEXT_PUBLIC_CURRENT_LEVEL=3
 
 NEXT_PUBLIC_SUPABASE_URL=<project-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable-or-anon-key>
@@ -228,20 +284,24 @@ npm run build
 npm run test:e2e
 ```
 
-Status terakhir: typecheck, lint, production build, dependency audit, dan **23/23 Playwright tests** lulus.
+Status terakhir: typecheck, lint, clean production build, dependency audit, dan **23/23 Playwright tests** lulus lokal maupun terhadap live Vercel deployment.
 
 ### Smart contracts
 
 ```bash
 cd contracts
-cargo test --workspace --locked
-cargo build -p hunt-instance --target wasm32v1-none --release --locked
-cargo test -p hunt-factory --features factory-integration --locked
+cargo fmt --all -- --check
+cargo check --workspace --locked
+cargo test -p reputation --locked
+cargo test -p hunt-instance --locked
+cargo build --target wasm32v1-none --release --locked \
+  -p hunt-instance -p hunt-factory -p reputation
+cargo test -p hunt-factory --features full-integration --locked
 ```
 
-Status terakhir: **8 state-machine tests**, **1 reputation test**, dan **3 factory integration tests** lulus.
+Status terakhir: **7 reputation tests**, **8 escrow state-machine tests**, dan **4 factory/full-WASM integration tests** lulus—total **19 Rust tests**.
 
-GitHub Actions menjalankan dependency audit, typecheck, lint, production build, Playwright, contract check, build WASM, dan factory integration test pada push atau pull request ke `main`.
+GitHub Actions menjalankan dependency audit, typecheck, lint, production build, Playwright, Rust format/check, seluruh 19 contract tests, dan build tiga WASM pada push atau pull request ke `main`. Workflow manual terpisah membangun, menguji, men-deploy, memverifikasi, dan mengunggah deployment manifest Testnet.
 
 ## Struktur Repository
 
@@ -258,8 +318,10 @@ jelajah/
 │   ├── reputation/                 XP/reputation prototype
 │   ├── dispute/                    Roadmap L3
 │   └── quest-chain/                Roadmap L3
-├── docs/                            Product dan technical documentation
-└── .github/workflows/ci.yml         CI web dan contracts
+├── deployments/                     Testnet deployment manifest
+├── scripts/deploy-contracts.sh      Reproducible guarded deploy script
+├── docs/                             Product, architecture, dan operations
+└── .github/workflows/                CI dan manual contract deployment
 ```
 
 ## Security Model
@@ -291,7 +353,8 @@ Sebelum Mainnet dibutuhkan attestation/oracle lokasi, dispute yang benar-benar m
 |---|---|---|
 | L1 | Landing, wallet, map, profile | Selesai |
 | L2 | GPS Hunt dan XLM escrow | MVP Testnet selesai |
-| L3 | Quest chain, verifier, dispute dan appeal | Direncanakan |
+| L3 | Inter-contract reputation, SSE, tests, CI/CD, live demo | MVP Testnet selesai |
+| L3+ | Quest chain, verifier, dispute dan appeal production flow | Roadmap |
 | L4 | Brand campaigns dan leaderboard | Direncanakan |
 | L5 | Community, streak, badges | Direncanakan |
 | L6 | Mainnet dan independent security audit | Direncanakan |
@@ -310,6 +373,8 @@ Sebelum Mainnet dibutuhkan attestation/oracle lokasi, dispute yang benar-benar m
 | [Belt Submission Guide](docs/07-belt-submission-guide.md) | Checklist challenge |
 | [Scale Architecture](docs/08-scale-architecture.md) | Rencana skalabilitas |
 | [Security & Operations](docs/09-security-and-operations.md) | Security boundary dan deployment |
+| [Level 3 Inter-Contract Architecture](docs/10-level-3-inter-contract-architecture.md) | Trust model, atomic flow, invariants, dan deployment order |
+| [Testnet Deployment Manifest](deployments/testnet-latest.json) | WASM hashes, contract IDs, transaction proof, dan verified final state |
 
 ## Kontributor
 

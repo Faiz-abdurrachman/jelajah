@@ -1,6 +1,6 @@
 # JELAJAH — Hidden. Hunted. Claimed.
 
-> Real-world treasure hunt platform di **Stellar blockchain**. MVP L2 saat ini mendukung GPS Hunt dengan escrow native XLM, bukti foto IPFS, approval hider, dan auto-release 24 jam.
+> Real-world treasure hunt platform di **Stellar blockchain**. MVP L3 mendukung GPS escrow native XLM, secure on-chain reputation XP, dan Soroban event streaming melalui SSE.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js)](https://nextjs.org/)
@@ -8,6 +8,8 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-000000?logo=stellar)](https://stellar.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase)](https://supabase.com/)
+
+Live production demo: **[https://jelajah-stellar.vercel.app](https://jelajah-stellar.vercel.app)**
 
 ---
 
@@ -40,6 +42,12 @@
 | Mobile Leaderboard | Mobile Profile | Mobile Community |
 |---|---|---|
 | ![Mobile Leaderboard](./public/screenshots/mobile-leaderboard.png) | ![Mobile Profile](./public/screenshots/mobile-profile.png) | ![Mobile Community](./public/screenshots/mobile-community.png) |
+
+### Level 3 live event streaming
+
+| Desktop production SSE | Mobile production SSE |
+|---|---|
+| ![Desktop SSE](./public/screenshots/level-3/live-events-desktop.png) | ![Mobile SSE](./public/screenshots/level-3/mobile-live-events.png) |
 
 ---
 
@@ -86,20 +94,20 @@ Run: `npm run test:e2e`
 ```yaml
 jobs:
   web: npm ci → dependency audit → typecheck → lint → build → Playwright
-  contracts: cargo check → 8 state-machine tests → build WASM → 3 factory integration tests
+  contracts: format/check → 7 reputation tests → 8 escrow tests → build 3 WASM → 4 full integration tests
 ```
 
 ---
 
 ## 🔗 Contract Verification
 
-**Transaction Hash** (reputation contract — `add_xp` call on Testnet):
+**Transaction Hash** (atomic XLM payout + `award_hunt_xp` inter-contract call):
 
 ```
-0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2
+619042c261559c4b0337657c3c8e7dc36df3b0cf9707eeba677b2b4836304c41
 ```
 
-🔗 [View on Stellar Expert](https://stellar.expert/explorer/testnet/tx/0d450bbf2a2a13896866c15215f894eb345d017e467d333ee98025cbf1d566b2)
+🔗 [View on Stellar Expert](https://stellar.expert/explorer/testnet/tx/619042c261559c4b0337657c3c8e7dc36df3b0cf9707eeba677b2b4836304c41)
 
 ---
 
@@ -134,7 +142,7 @@ Verified Testnet transaction: [`f960ed9e734dbe1051430051f366c4af19d9bc0e000d6029
 
 ## 🥋 Level 2 Submission Evidence
 
-JELAJAH menyediakan pilihan Freighter dan Albedo, memanggil GPS Hunt Factory dari frontend, menampilkan fase transaksi, dan memperbarui event Soroban setiap lima detik.
+JELAJAH menyediakan pilihan Freighter dan Albedo, memanggil GPS Hunt Factory dari frontend, menampilkan fase transaksi, dan sekarang mendorong event Soroban real-time melalui SSE.
 
 | Wallet options | Confirmed frontend contract call |
 |---|---|
@@ -169,14 +177,14 @@ Semua contract udah di-**deploy ke Stellar Testnet**:
 
 | Contract | Address | Explorer |
 |---|---|---|
-| **hunt-factory (GPS escrow MVP)** | `CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55` | [🔗](https://stellar.expert/explorer/testnet/contract/CA4YH5KFC5JBT6ISKCG42VU4PNN6EAAE245CLMOZTJDSIEGDRA4IQR55) |
-| **reputation** | `CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3` | [🔗](https://stellar.expert/explorer/testnet/contract/CDBXC2HQPL6EV7NSQXGQZ6FIX52ZJCRSEGPG5BYZL7KMU2ATOYN32XS3) |
+| **hunt-factory L3** | `CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2` | [🔗](https://stellar.expert/explorer/testnet/contract/CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2) |
+| **reputation L3** | `CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3` | [🔗](https://stellar.expert/explorer/testnet/contract/CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3) |
 | **dispute** | `CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB` | [🔗](https://stellar.expert/explorer/testnet/contract/CA2T25TDCILD2AUTBGLDASTTXTQCA7A5XVASWATDRJ7WS5FF3TKXTWWB) |
 | **quest-chain** | `CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ` | [🔗](https://stellar.expert/explorer/testnet/contract/CC67Y27UHKO752HXKKW2KX4JIK5QNFDFZT5CDCNZ4AT6MRE3BONVYVMJ) |
-| **hunt-instance** | WASM uploaded; factory deploy per hunt | `eee91c39c3700c63ad7a329738721b49a50722d9a000054ad876dca51d12dfce` |
+| **hunt-instance** | WASM uploaded; factory deploy per hunt | `e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540` |
 | **native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` | Testnet asset contract |
 
-Live smoke test menghasilkan instance `CCEX3DHRPFWFTDDTHPUJT7ZX7V2LZK53LLB477EDSNRTCQJELQZU3TRA`: escrow 1 XLM → hunter claim → hider approve → status `Claimed` dan escrow `0`.
+Live proof instance `CC53OUXAOKQKUC6IXOGGKOV5M2WZXSBLPLHSCZM24F6GFZJY74JTHNA7`: escrow 0.1 XLM → hunter claim → hider approve → payout + XP → status `Claimed`, escrow `0`, XP `100`.
 
 ---
 
@@ -186,7 +194,7 @@ Live smoke test menghasilkan instance `CCEX3DHRPFWFTDDTHPUJT7ZX7V2LZK53LLB477EDS
 |---|---|---|---|
 | **L1** | White | Landing, Map, Profile, Wallet | ✅ Selesai |
 | **L2** | Yellow | Create Hunt, Claim Hunt | ✅ Selesai |
-| **L3** | Orange | Quest Chain, Verifier, Dispute, Settings | ⬜ |
+| **L3** | Orange | Inter-contract Reputation, SSE, CI/CD, live demo | ✅ Selesai |
 | **L4** | Green | Brand Dashboard, Leaderboard | ⬜ |
 | **L5** | Blue | Community Feed, Streaks, Badges | ⬜ |
 | **L6** | Black | Mainnet Migration, Security Audit | ⬜ |
@@ -225,15 +233,15 @@ NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org
 NEXT_PUBLIC_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 
 # Contract addresses (lihat table di atas)
-NEXT_PUBLIC_HUNT_FACTORY=<hunt-factory-address>
-NEXT_PUBLIC_REPUTATION_CONTRACT=<reputation-address>
+NEXT_PUBLIC_HUNT_FACTORY=CASEPHHQ2CCI2CXLW4BW5GPMJ4DBRB4ECJ453FLNEUFJEKS47UURFSM2
+NEXT_PUBLIC_REPUTATION_CONTRACT=CC3ITPZMQQDTGZWLKNV75WQLOJ5RKACYWNLB2BW6HMWQT4CWF5N3SVH3
 NEXT_PUBLIC_DISPUTE_CONTRACT=<dispute-address>
 NEXT_PUBLIC_QUEST_CHAIN_CONTRACT=<quest-chain-address>
-NEXT_PUBLIC_HUNT_INSTANCE_WASM_HASH=<wasm-hash>
-NEXT_PUBLIC_XLM_ASSET_CONTRACT=<native-xlm-sac-address>
+NEXT_PUBLIC_HUNT_INSTANCE_WASM_HASH=e373a9717ac3efc0e9c91753d73057afd275a6bbf04645361205277db241b540
+NEXT_PUBLIC_XLM_ASSET_CONTRACT=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
 
 # Level (feature gate)
-NEXT_PUBLIC_CURRENT_LEVEL=2
+NEXT_PUBLIC_CURRENT_LEVEL=3
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://vzohtezrdhselrommvcm.supabase.co
@@ -271,9 +279,11 @@ Buka [http://localhost:3000](http://localhost:3000)
 
 ```bash
 cd contracts
-cargo test -p hunt-instance
-cargo build -p hunt-instance --target wasm32v1-none --release
-cargo test -p hunt-factory --features factory-integration
+cargo test -p reputation --locked
+cargo test -p hunt-instance --locked
+cargo build --target wasm32v1-none --release --locked \
+  -p hunt-instance -p hunt-factory -p reputation
+cargo test -p hunt-factory --features full-integration --locked
 ```
 
 ---
@@ -290,16 +300,16 @@ npx next build                      # Production build
 
 # ── Contracts ──
 cd contracts && cargo check --workspace --locked
+cargo test -p reputation --locked
 cargo test -p hunt-instance --locked
-cargo build -p hunt-instance --target wasm32v1-none --release --locked
-cargo test -p hunt-factory --features factory-integration --locked
+cargo build --target wasm32v1-none --release --locked \
+  -p hunt-instance -p hunt-factory -p reputation
+cargo test -p hunt-factory --features full-integration --locked
 
 # ── Deploy Contract ──
-stellar contract deploy \
-  --wasm contracts/target/wasm32v1-none/release/<contract>.wasm \
-  --source <YOUR_SECRET_KEY> \
-  --rpc-url https://soroban-testnet.stellar.org \
-  --network-passphrase "Test SDF Network ; September 2015"
+export STELLAR_ACCOUNT=<funded-local-testnet-identity>
+export STELLAR_ADMIN_ADDRESS=<matching-public-G-address>
+../../scripts/deploy-contracts.sh
 
 # ── Git ──
 git add -A && git commit -m "feat: what was done"
@@ -370,13 +380,17 @@ jelajah/
 | Live Soroban contract events | ✅ |
 | Transaction phases, hash, dan recovery | ✅ |
 
-### Level 3 — Orange Belt (⬜)
+### Level 3 — Orange Belt (✅)
 | Fitur | Status |
 |---|---|
-| Quest Chain (multi-step) | ⬜ |
-| Verifier Dashboard | ⬜ |
-| Dispute + Appeal | ⬜ |
-| Settings (network, language) | ⬜ |
+| Factory → Instance → Reputation inter-contract flow | ✅ |
+| Secure payout + reputation XP atomik | ✅ |
+| Soroban event streaming melalui SSE | ✅ |
+| CI dan guarded Testnet deployment workflow | ✅ |
+| 19 contract tests + 23 frontend tests | ✅ |
+| Mobile responsive production demo | ✅ |
+
+Quest Chain, Verifier Dashboard, Dispute/Appeal production flow, dan Settings tetap menjadi roadmap setelah submission Level 3.
 
 ---
 
@@ -394,6 +408,9 @@ Semua dokumentasi ada di folder `docs/`:
 | [06-economics.md](../../docs/06-economics.md) | Ekonomi & revenue |
 | [07-belt-submission-guide.md](../../docs/07-belt-submission-guide.md) | Panduan submission belt |
 | [08-scale-architecture.md](../../docs/08-scale-architecture.md) | Arsitektur skalabilitas |
+| [09-security-and-operations.md](../../docs/09-security-and-operations.md) | Security boundary dan operasi deployment |
+| [10-level-3-inter-contract-architecture.md](../../docs/10-level-3-inter-contract-architecture.md) | Trust model dan flow inter-contract Level 3 |
+| [testnet-latest.json](../../deployments/testnet-latest.json) | Manifest dan bukti deployment Testnet terbaru |
 
 ---
 
