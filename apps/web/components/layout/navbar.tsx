@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Compass, Map, User, WalletIcon, Menu, Swords, ShieldCheck, Settings, Trophy, Users } from "lucide-react";
+import { Building2, Compass, Map, User, WalletIcon, Menu, Swords, ShieldCheck, Settings, Trophy, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/quest/1", label: "Quest", icon: Swords, level: 3, featureKey: "quest-chain" as const },
   { href: "/verify", label: "Verify", icon: ShieldCheck, level: 3, featureKey: "verifier-dashboard" as const },
   { href: "/settings", label: "Settings", icon: Settings, level: 3, featureKey: "settings" as const },
+  { href: "/brand/dashboard", label: "Campaigns", icon: Building2, level: 4, featureKey: "brand-dashboard" as const },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy, level: 4, featureKey: "leaderboard" as const },
   { href: "/community", label: "Community", icon: Users, level: 5, featureKey: "community-feed" as const },
 ] as const;

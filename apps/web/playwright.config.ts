@@ -24,7 +24,7 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "PORT=3001 npm run dev",
+        command: "NEXT_PUBLIC_CURRENT_LEVEL=4 PORT=3001 npm run dev",
         url: "http://localhost:3001",
         reuseExistingServer: !process.env.CI,
         timeout: 120000,

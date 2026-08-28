@@ -91,7 +91,7 @@ async function sha256Hex(value: string): Promise<string> {
 
 // ─── Component ───────────────────────────────────────
 
-export function CreateHuntWizard() {
+export function CreateHuntWizard({ campaignId }: { campaignId?: number }) {
   const router = useRouter();
   const { isConnected, connect, publicKey, signAndSubmit } = useWallet();
   const [step, setStep] = useState(0);
@@ -104,6 +104,7 @@ export function CreateHuntWizard() {
     transactionHash: string;
     huntIdHash: string;
     photoCid: string | null;
+    campaignId?: number;
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [indexError, setIndexError] = useState<string | null>(null);
@@ -224,6 +225,7 @@ export function CreateHuntWizard() {
         transactionHash: submitResult.hash,
         huntIdHash,
         photoCid: photoCid || null,
+        ...(campaignId ? { campaignId } : {}),
       };
       setPendingIndex(indexPayload);
 
@@ -281,7 +283,9 @@ export function CreateHuntWizard() {
         <div className="rounded-full bg-primary/10 p-4 mb-6">
           <Check className="size-10 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2">Hunt Berhasil Dibuat On-chain!</h2>
+        <h2 className="text-2xl font-bold mb-2">
+          {campaignId ? "Campaign Hunt Berhasil Didanai!" : "Hunt Berhasil Dibuat On-chain!"}
+        </h2>
         <p className="text-muted-foreground mb-4 max-w-md">
           Contract call sudah dikonfirmasi oleh Stellar Testnet.
         </p>
@@ -331,13 +335,18 @@ export function CreateHuntWizard() {
             Data hunt sudah tersinkron dan siap ditampilkan di peta.
           </p>
         )}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
+          {campaignId ? (
+            <Button onClick={() => router.push("/brand/dashboard")}>
+              Kembali ke Campaign
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => router.push("/map")}>
             Lihat Peta
           </Button>
-          <Button onClick={() => router.push("/profile")}>
+          {!campaignId ? <Button onClick={() => router.push("/profile")}>
             Lihat Profile
-          </Button>
+          </Button> : null}
         </div>
       </div>
     );
@@ -345,6 +354,24 @@ export function CreateHuntWizard() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {campaignId ? (
+        <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                Campaign escrow
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                Reward hunt ini akan dicatat ke campaign #{campaignId} setelah contract call
+                terkonfirmasi.
+              </p>
+            </div>
+            <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-800">
+              Testnet
+            </Badge>
+          </div>
+        </div>
+      ) : null}
       {/* Step indicator */}
       <div className="flex items-center justify-between mb-8">
         {["Type", "Clue", "GPS", "Reward", "Deadline", "Review"].map(

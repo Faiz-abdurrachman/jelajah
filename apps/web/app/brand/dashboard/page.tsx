@@ -1,144 +1,113 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Building2, Loader2, Plus, RefreshCw, ShieldCheck } from "lucide-react";
+import { BrandDashboard } from "@/components/brand/brand-dashboard";
+import { CampaignCreate } from "@/components/brand/campaign-create";
 import { RequireLevel } from "@/components/feature-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Building2, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useWallet } from "@/components/wallet/wallet-provider";
-import { getBrandProfile, registerBrand } from "@/lib/supabase/client";
-import { BrandDashboard } from "@/components/brand/brand-dashboard";
-import { CampaignCreate } from "@/components/brand/campaign-create";
-import type { Brand } from "@/types";
+import { loadBrandProfile, loadSponsorCampaigns, registerBrand } from "@/lib/api/campaigns";
+import type { BrandProfileDto, CampaignDto } from "@/lib/data/level4";
 
 export default function BrandDashboardPage() {
-  const { publicKey, isConnected } = useWallet();
-  const [isBrand, setIsBrand] = useState<boolean | null>(null);
-  const [brandData, setBrandData] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { isConnected, publicKey, connect } = useWallet();
+  const [brand, setBrand] = useState<BrandProfileDto | null>(null);
+  const [campaigns, setCampaigns] = useState<CampaignDto[]>([]);
+  const [companyName, setCompanyName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [registering, setRegistering] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadWorkspace = useCallback(async () => {
+    // Keep state changes on the async side of the effect boundary.
+    await Promise.resolve();
+    if (!publicKey) {
+      setBrand(null); setCampaigns([]); setLoading(false); return;
+    }
+    setLoading(true); setError(null);
+    try {
+      const profile = await loadBrandProfile();
+      setBrand(profile);
+      setCampaigns(profile ? await loadSponsorCampaigns() : []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Workspace gagal dimuat");
+    } finally {
+      setLoading(false);
+    }
+  }, [publicKey]);
 
   useEffect(() => {
-    let cancelled = false;
+    const timer = window.setTimeout(() => void loadWorkspace(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadWorkspace]);
 
-    async function load() {
-      if (!publicKey) {
-        if (!cancelled) setLoading(false);
-        return;
-      }
-
-      try {
-        const profile = await getBrandProfile(publicKey);
-        if (!cancelled) {
-          setIsBrand(!!profile);
-          setBrandData(profile ? brandRowToData(profile) : null);
-        }
-      } catch {
-        if (!cancelled) setIsBrand(false);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => { cancelled = true; };
-  }, [publicKey]);
-
-  const handleRegisterBrand = useCallback(async () => {
-    if (!publicKey) return;
+  const handleRegister = async () => {
+    if (companyName.trim().length < 2) return;
+    setRegistering(true); setError(null);
     try {
-      const result = await registerBrand(publicKey, "My Brand");
-      setIsBrand(true);
-      setBrandData(brandRowToData(result as unknown as Brand));
-    } catch {
-      // silently fail - retry on next load
+      const profile = await registerBrand(companyName.trim());
+      setBrand(profile); setCampaigns([]);
+    } catch (registrationError) {
+      setError(registrationError instanceof Error ? registrationError.message : "Registrasi brand gagal");
+    } finally {
+      setRegistering(false);
     }
-  }, [publicKey]);
-
-  if (loading) {
-    return (
-      <RequireLevel level={4}>
-        <div className="container max-w-5xl mx-auto py-8 px-4 space-y-4 animate-pulse">
-          <div className="h-8 w-48 bg-muted rounded" />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-24 bg-muted rounded-lg" />
-            ))}
-          </div>
-        </div>
-      </RequireLevel>
-    );
-  }
+  };
 
   return (
     <RequireLevel level={4}>
-      <div className="container max-w-5xl mx-auto py-8 px-4 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Building2 className="size-6 text-primary" />
-            <h1 className="text-2xl font-bold">Brand Dashboard</h1>
-            {brandData && (
-              <Badge variant="secondary">
-                {(brandData.subscription_tier as string) ?? "basic"}
-              </Badge>
-            )}
-          </div>
-          {isBrand && (
-            <Button onClick={() => setShowCreate(!showCreate)}>
-              <Plus className="size-4 mr-2" />
-              {showCreate ? "Cancel" : "New Campaign"}
-            </Button>
+      <main className="min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(180deg,rgba(6,78,59,0.06),transparent_22rem)]">
+        <div className="container mx-auto max-w-6xl space-y-6 px-4 py-7 sm:py-10">
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700"><ShieldCheck className="size-4" /> Verified campaign operations</div>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Brand field desk</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Rancang aktivasi lokasi, danai reward melalui Stellar Testnet, dan simpan bukti transaksi yang dapat diverifikasi.</p>
+            </div>
+            {brand ? <Button onClick={() => setShowCreate((current) => !current)} className="bg-emerald-700 text-white hover:bg-emerald-800"><Plus className="mr-2 size-4" />{showCreate ? "Tutup form" : "Campaign baru"}</Button> : null}
+          </header>
+
+          {error ? (
+            <div role="alert" className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between">
+              <span>{error}</span><Button variant="outline" size="sm" onClick={() => void loadWorkspace()}><RefreshCw className="mr-2 size-3.5" /> Coba lagi</Button>
+            </div>
+          ) : null}
+
+          {!isConnected ? (
+            <Card className="overflow-hidden border-0 bg-emerald-950 text-white shadow-xl shadow-emerald-950/10">
+              <CardContent className="grid min-h-72 place-items-center p-8 text-center">
+                <div className="max-w-lg">
+                  <div className="mx-auto mb-5 grid size-12 place-items-center rounded-full bg-white/10"><Building2 className="size-6 text-emerald-300" /></div>
+                  <h2 className="text-2xl font-semibold">Buka sponsor workspace</h2>
+                  <p className="mt-2 text-sm leading-6 text-emerald-100/75">Hubungkan wallet Testnet. Signature challenge membuktikan kepemilikan tanpa pernah mengirim secret key ke server.</p>
+                  <Button onClick={() => void connect()} className="mt-6 bg-white text-emerald-950 hover:bg-emerald-50">Connect wallet</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : loading ? (
+            <div role="status" className="grid min-h-64 place-items-center rounded-xl border bg-card"><div className="text-center"><Loader2 className="mx-auto size-6 animate-spin text-emerald-700" /><p className="mt-3 text-sm font-medium">Memuat campaign workspace…</p></div></div>
+          ) : !brand ? (
+            <Card className="mx-auto max-w-xl shadow-none">
+              <CardContent className="space-y-5 p-6 sm:p-8">
+                <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">First-time setup</p><h2 className="mt-2 text-xl font-semibold">Daftarkan organisasi</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Profil ini mengelompokkan campaign dan bukti transaksi milik wallet kamu.</p></div>
+                <label className="block space-y-2"><span className="text-sm font-medium">Nama organisasi</span><Input autoFocus maxLength={100} placeholder="Contoh: Jelajah Labs" value={companyName} onChange={(event) => setCompanyName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void handleRegister(); }} /></label>
+                <Button className="w-full bg-emerald-700 text-white hover:bg-emerald-800" disabled={registering || companyName.trim().length < 2} onClick={() => void handleRegister()}>{registering ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Buat sponsor workspace</Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {showCreate ? <CampaignCreate onCancel={() => setShowCreate(false)} onCreated={(campaign) => { setCampaigns((current) => [campaign, ...current]); setShowCreate(false); router.push(`/hunt/create?campaign=${campaign.id}`); }} /> : null}
+              <BrandDashboard brand={brand} campaigns={campaigns} />
+            </>
           )}
         </div>
-
-        {!isConnected ? (
-          <Card>
-            <CardContent className="p-6 text-center space-y-2">
-              <Building2 className="size-8 mx-auto text-muted-foreground" />
-              <p className="font-medium">Connect your wallet to access Brand Dashboard.</p>
-            </CardContent>
-          </Card>
-        ) : !isBrand ? (
-          <Card>
-            <CardContent className="p-6 text-center space-y-4">
-              <Building2 className="size-8 mx-auto text-muted-foreground" />
-              <div>
-                <h2 className="text-lg font-semibold">Register Your Brand</h2>
-                <p className="text-sm text-muted-foreground">
-                  Create campaigns and engage your audience with location-based hunts.
-                </p>
-              </div>
-              <Button size="lg" onClick={handleRegisterBrand}>
-                Register as Brand
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {brandData && <BrandDashboard data={brandData} />}
-
-            {showCreate && (
-              <CampaignCreate
-                onCreated={() => setShowCreate(false)}
-                onCancel={() => setShowCreate(false)}
-              />
-            )}
-          </>
-        )}
-      </div>
+      </main>
     </RequireLevel>
   );
-}
-
-function brandRowToData(brand: Brand): Record<string, unknown> {
-  const raw = brand as unknown as Record<string, unknown>;
-  return {
-    company_name: brand.companyName,
-    subscription_tier: brand.subscriptionTier,
-    subscription_start: raw.subscription_start ?? null,
-    subscription_end: brand.subscriptionEnd,
-    total_campaigns: brand.totalCampaigns,
-    total_spent: raw.total_spent ?? 0,
-  };
 }
