@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/auth/session";
+import { recordWalletInteraction } from "@/lib/data/level4";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { scAddress, verifyContractCall } from "@/lib/stellar/verify-transaction";
 
@@ -87,7 +88,15 @@ export async function POST(
       .eq("id", hunt.id);
     if (huntError) throw huntError;
 
-    return Response.json({ status: claimStatus });
+    const evidenceRecorded = await recordWalletInteraction({
+      transactionHash: body.transactionHash,
+      publicKey: session.address,
+      action: body.resolution,
+      contractId: hunt.contract_id,
+      ledger: chain.ledger,
+      confirmedAt: chain.confirmedAt,
+    });
+    return Response.json({ status: claimStatus, evidenceRecorded });
   } catch (error) {
     const unauthenticated = error instanceof Error && error.message === "UNAUTHENTICATED";
     return Response.json(

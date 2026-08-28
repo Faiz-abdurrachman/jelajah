@@ -31,5 +31,25 @@ test.describe("Wallet API security", () => {
       multipart: { file: { name: "fake.png", mimeType: "image/png", buffer: Buffer.from("fake") } },
     });
     expect(upload.status()).toBe(401);
+
+    const brand = await request.post("/api/brands", {
+      data: { companyName: "Untrusted Brand" },
+    });
+    expect(brand.status()).toBe(401);
+
+    const campaign = await request.post("/api/campaigns", {
+      data: {
+        name: "Untrusted Campaign",
+        budgetXlm: "10",
+        startDate: "2026-09-01T00:00:00.000Z",
+        endDate: "2026-09-02T00:00:00.000Z",
+      },
+    });
+    expect(campaign.status()).toBe(401);
+
+    const link = await request.post("/api/campaigns/1/hunts", {
+      data: { huntId: 1 },
+    });
+    expect(link.status()).toBe(401);
   });
 });

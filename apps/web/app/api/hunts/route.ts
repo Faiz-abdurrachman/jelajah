@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { requireSession } from "@/lib/auth/session";
+import { linkHuntToSponsorCampaign, recordWalletInteraction } from "@/lib/data/level4";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   scAddress,
@@ -14,6 +15,7 @@ interface HuntIndexRequest {
   huntIdHash?: unknown;
   clue?: unknown;
   photoCid?: unknown;
+  campaignId?: unknown;
 }
 
 function sha256(value: string): string {
@@ -45,7 +47,12 @@ export async function POST(request: Request) {
       (body.photoCid !== null &&
         body.photoCid !== undefined &&
         (typeof body.photoCid !== "string" ||
-          !/^(?:Qm|baf)[A-Za-z0-9]{18,117}$/.test(body.photoCid)))
+          !/^(?:Qm|baf)[A-Za-z0-9]{18,117}$/.test(body.photoCid))) ||
+      (body.campaignId !== null &&
+        body.campaignId !== undefined &&
+        (typeof body.campaignId !== "number" ||
+          !Number.isInteger(body.campaignId) ||
+          body.campaignId <= 0))
     ) {
       return Response.json({ error: "Metadata hunt tidak valid" }, { status: 400 });
     }
@@ -119,10 +126,42 @@ export async function POST(request: Request) {
         .select("id, contract_id, hider_pubkey")
         .eq("hunt_id_hash", huntIdHash)
         .single();
-      if (existing?.hider_pubkey === session.address) return Response.json(existing);
+      if (existing?.hider_pubkey === session.address) {
+        const evidenceRecorded = await recordWalletInteraction({
+          transactionHash: body.transactionHash,
+          publicKey: session.address,
+          action: "create_hunt",
+          contractId: factory,
+          ledger: chain.ledger,
+          confirmedAt: chain.confirmedAt,
+        });
+        if (typeof body.campaignId === "number") {
+          await linkHuntToSponsorCampaign({
+            publicKey: session.address,
+            campaignId: body.campaignId,
+            huntId: Number(existing.id),
+          });
+        }
+        return Response.json({ ...existing, evidenceRecorded });
+      }
     }
     if (error) throw error;
-    return Response.json(data, { status: 201 });
+    const evidenceRecorded = await recordWalletInteraction({
+      transactionHash: body.transactionHash,
+      publicKey: session.address,
+      action: "create_hunt",
+      contractId: factory,
+      ledger: chain.ledger,
+      confirmedAt: chain.confirmedAt,
+    });
+    if (typeof body.campaignId === "number") {
+      await linkHuntToSponsorCampaign({
+        publicKey: session.address,
+        campaignId: body.campaignId,
+        huntId: Number(data.id),
+      });
+    }
+    return Response.json({ ...data, evidenceRecorded }, { status: 201 });
   } catch (error) {
     const unauthenticated = error instanceof Error && error.message === "UNAUTHENTICATED";
     return Response.json(

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { requireSession } from "@/lib/auth/session";
+import { recordWalletInteraction } from "@/lib/data/level4";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   scAddress,
@@ -123,7 +124,15 @@ export async function POST(request: Request) {
       .update({ status: "claim_pending" })
       .eq("id", body.huntId);
     if (huntUpdateError) throw huntUpdateError;
-    return Response.json(data, { status: 201 });
+    const evidenceRecorded = await recordWalletInteraction({
+      transactionHash: body.transactionHash,
+      publicKey: session.address,
+      action: "submit_claim",
+      contractId: hunt.contract_id,
+      ledger: chain.ledger,
+      confirmedAt: chain.confirmedAt,
+    });
+    return Response.json({ ...data, evidenceRecorded }, { status: 201 });
   } catch (error) {
     const unauthenticated = error instanceof Error && error.message === "UNAUTHENTICATED";
     return Response.json(

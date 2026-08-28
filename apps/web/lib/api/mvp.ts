@@ -13,6 +13,7 @@ export async function indexConfirmedHunt(input: {
   huntIdHash: string;
   clue: string;
   photoCid: string | null;
+  campaignId?: number;
 }): Promise<{ id: number; contract_id: string }> {
   return parseResponse(
     await fetch("/api/hunts", {

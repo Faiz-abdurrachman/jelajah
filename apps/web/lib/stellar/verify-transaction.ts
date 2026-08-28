@@ -11,6 +11,8 @@ import { getNetworkPassphrase, getRpcServer } from "@/lib/stellar/soroban";
 export interface VerifiedContractCall {
   args: xdr.ScVal[];
   returnValue: xdr.ScVal | undefined;
+  ledger: number;
+  confirmedAt: string;
 }
 
 export async function verifyContractCall(
@@ -55,7 +57,16 @@ export async function verifyContractCall(
     throw new Error("Transaksi tidak cocok dengan aksi yang diminta");
   }
 
-  return { args: invocation.args(), returnValue: response.returnValue };
+  return {
+    args: invocation.args(),
+    returnValue: response.returnValue,
+    ledger: response.ledger,
+    confirmedAt: new Date(
+      response.createdAt < 1_000_000_000_000
+        ? response.createdAt * 1_000
+        : response.createdAt
+    ).toISOString(),
+  };
 }
 
 export function scBytesToHex(value: xdr.ScVal): string {
