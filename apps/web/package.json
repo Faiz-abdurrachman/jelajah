@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "npx playwright test",
-    "test:e2e": "npx playwright test --project=chromium"
+    "test:e2e": "npx playwright test --project=chromium",
+    "demo:record": "node scripts/record-level3-demo.mjs"
   },
   "dependencies": {
     "@albedo-link/intent": "^0.12.0",

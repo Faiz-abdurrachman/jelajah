@@ -11,6 +11,8 @@
 
 Live production demo: **[https://jelajah-stellar.vercel.app](https://jelajah-stellar.vercel.app)**
 
+Level 3 demo video (1 minute 29 seconds): **[Watch video](https://jelajah-stellar.vercel.app/demo/jelajah-level3-demo.webm)**
+
 ---
 
 ## 📸 Screenshots
@@ -49,6 +51,12 @@ Live production demo: **[https://jelajah-stellar.vercel.app](https://jelajah-ste
 |---|---|
 | ![Desktop SSE](./public/screenshots/level-3/live-events-desktop.png) | ![Mobile SSE](./public/screenshots/level-3/mobile-live-events.png) |
 
+| Successful CI pipeline | 23 passing frontend tests |
+|---|---|
+| ![CI passed](./public/screenshots/level-3/ci-pipeline.png) | ![23 Playwright tests passed](./public/screenshots/level-3/test-output.png) |
+
+Verified CI: [`33130457709`](https://github.com/Faiz-abdurrachman/jelajah/actions/runs/33130457709), with both `web` and `contracts` jobs passing.
+
 ---
 
 ## 🧪 E2E Tests
@@ -84,6 +92,8 @@ Running 23 tests using 4 workers
 ```
 
 Run: `npm run test:e2e`
+
+Re-record the public 1–2 minute demo with `npm run demo:record`.
 
 ---
 
@@ -410,6 +420,7 @@ Semua dokumentasi ada di folder `docs/`:
 | [08-scale-architecture.md](../../docs/08-scale-architecture.md) | Arsitektur skalabilitas |
 | [09-security-and-operations.md](../../docs/09-security-and-operations.md) | Security boundary dan operasi deployment |
 | [10-level-3-inter-contract-architecture.md](../../docs/10-level-3-inter-contract-architecture.md) | Trust model dan flow inter-contract Level 3 |
+| [11-demo-script.md](../../docs/11-demo-script.md) | Recorder visual dan narasi demo 1–2 menit |
 | [testnet-latest.json](../../deployments/testnet-latest.json) | Manifest dan bukti deployment Testnet terbaru |
 
 ---

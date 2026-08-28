@@ -132,7 +132,7 @@ Live demo: **[https://jelajah-stellar.vercel.app](https://jelajah-stellar.vercel
 | Error handling & loading states | Wallet/RPC/contract/IPFS/database errors dan degraded database state | Siap |
 | Tests for contracts and frontend | 19 Rust tests + 23 Playwright tests | Siap |
 | Production-ready architecture | Canonical chain, secondary index, signed session, server-only secrets, atomic cross-contract flow | Siap untuk Testnet |
-| Documentation & demo | Architecture ADR, deployment manifest, explorer links, screenshots, live demo | Siap; video masih perlu direkam |
+| Documentation & demo | Architecture ADR, deployment manifest, explorer links, screenshots, live demo, video 1:29 | Siap |
 
 ### Production Testnet contracts
 
@@ -160,7 +160,13 @@ Final state was read back from Testnet: `Claimed`, escrow `0`, hunter XP `100`, 
 |---|---|
 | ![Production live contract events](apps/web/public/screenshots/level-3/live-events-desktop.png) | ![Mobile live contract events](apps/web/public/screenshots/level-3/mobile-live-events.png) |
 
-CI and test-output screenshots will be added from the first successful GitHub Actions run for this Level 3 commit set. The required 1–2 minute demo video must be recorded and linked by the submitter because it requires voice/screen narration.
+| Successful CI pipeline | 23 passing frontend tests |
+|---|---|
+| ![GitHub Actions web and contracts passed](apps/web/public/screenshots/level-3/ci-pipeline.png) | ![Playwright 23 tests passed](apps/web/public/screenshots/level-3/test-output.png) |
+
+- Verified CI run: [`33130457709`](https://github.com/Faiz-abdurrachman/jelajah/actions/runs/33130457709) — `web` and `contracts` passed.
+- Demo video (1 minute 29 seconds): **[Watch the Level 3 demo](https://jelajah-stellar.vercel.app/demo/jelajah-level3-demo.webm)**.
+- Reproducible recorder and optional narration: [`apps/web/scripts/record-level3-demo.mjs`](apps/web/scripts/record-level3-demo.mjs) and [`docs/11-demo-script.md`](docs/11-demo-script.md).
 
 ## Tampilan
 
@@ -374,6 +380,7 @@ Sebelum Mainnet dibutuhkan attestation/oracle lokasi, dispute yang benar-benar m
 | [Scale Architecture](docs/08-scale-architecture.md) | Rencana skalabilitas |
 | [Security & Operations](docs/09-security-and-operations.md) | Security boundary dan deployment |
 | [Level 3 Inter-Contract Architecture](docs/10-level-3-inter-contract-architecture.md) | Trust model, atomic flow, invariants, dan deployment order |
+| [Level 3 Demo Script](docs/11-demo-script.md) | Recorder visual dan narasi demo 1–2 menit |
 | [Testnet Deployment Manifest](deployments/testnet-latest.json) | WASM hashes, contract IDs, transaction proof, dan verified final state |
 
 ## Kontributor
