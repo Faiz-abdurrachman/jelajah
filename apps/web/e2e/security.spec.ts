@@ -51,5 +51,10 @@ test.describe("Wallet API security", () => {
       data: { huntId: 1 },
     });
     expect(link.status()).toBe(401);
+
+    const pilot = await request.post("/api/pilot", {
+      data: { action: "start", role: "hunter", accepted: true },
+    });
+    expect(pilot.status()).toBe(401);
   });
 });
