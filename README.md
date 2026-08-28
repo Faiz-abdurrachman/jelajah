@@ -165,7 +165,7 @@ Final state was read back from Testnet: `Claimed`, escrow `0`, hunter XP `100`, 
 | ![GitHub Actions web and contracts passed](apps/web/public/screenshots/level-3/ci-pipeline.png) | ![Playwright 23 tests passed](apps/web/public/screenshots/level-3/test-output.png) |
 
 - Verified CI run: [`33130457709`](https://github.com/Faiz-abdurrachman/jelajah/actions/runs/33130457709) — `web` and `contracts` passed.
-- Demo video (1 minute 29 seconds): **[Watch the Level 3 demo](https://jelajah-stellar.vercel.app/demo/jelajah-level3-demo.mp4)**.
+- Demo video (1 minute 29 seconds): **[Watch the Level 3 demo](https://jelajah-stellar.vercel.app/demo)**. The player provides VP8/WebM and H.264/MP4 sources for cross-browser playback.
 - Reproducible recorder and optional narration: [`apps/web/scripts/record-level3-demo.mjs`](apps/web/scripts/record-level3-demo.mjs) and [`docs/11-demo-script.md`](docs/11-demo-script.md).
 
 ## Tampilan

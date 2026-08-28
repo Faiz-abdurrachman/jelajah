@@ -8,6 +8,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDirectory, "..");
 const rawDirectory = path.join(webRoot, "public", "demo", "raw");
 const rawOutputPath = path.join(webRoot, "public", "demo", "jelajah-level3-demo.raw.webm");
+const webmOutputPath = path.join(webRoot, "public", "demo", "jelajah-level3-demo.webm");
 const outputPath = path.join(webRoot, "public", "demo", "jelajah-level3-demo.mp4");
 const liveUrl = process.env.DEMO_BASE_URL ?? "https://jelajah-stellar.vercel.app";
 
@@ -140,6 +141,23 @@ await rm(rawOutputPath, { force: true });
 await rename(await video.path(), rawOutputPath);
 await rm(rawDirectory, { recursive: true, force: true });
 
+await rm(webmOutputPath, { force: true });
+await run("ffmpeg", [
+  "-hide_banner",
+  "-loglevel",
+  "warning",
+  "-y",
+  "-i",
+  rawOutputPath,
+  "-c",
+  "copy",
+  "-reserve_index_space",
+  "200000",
+  "-cues_to_front",
+  "1",
+  webmOutputPath,
+]);
+
 await rm(outputPath, { force: true });
 await run("ffmpeg", [
   "-hide_banner",
@@ -161,4 +179,4 @@ await run("ffmpeg", [
   outputPath,
 ]);
 await rm(rawOutputPath, { force: true });
-console.log(outputPath);
+console.log(`${webmOutputPath}\n${outputPath}`);

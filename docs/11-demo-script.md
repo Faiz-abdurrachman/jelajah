@@ -6,7 +6,7 @@ Target durasi: 1–2 menit. Recorder visual dapat dijalankan dari `apps/web` den
 node scripts/record-level3-demo.mjs
 ```
 
-Recorder membutuhkan `ffmpeg` untuk menghasilkan MP4 H.264 dengan metadata `faststart`, sehingga video dapat diputar dan di-seek secara konsisten dari browser.
+Recorder membutuhkan `ffmpeg` untuk menghasilkan WebM VP8 dengan cue di depan serta MP4 H.264 dengan metadata `faststart`. Halaman `/demo` memilih source yang didukung browser dan menyediakan fallback unduhan.
 
 ## Narasi opsional
 
