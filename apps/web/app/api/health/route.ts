@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const checks = {
-    stellarRpc: Boolean(process.env.NEXT_PUBLIC_STELLAR_RPC),
+    stellarRpc: Boolean(process.env.NEXT_PUBLIC_RPC_URL),
     huntFactory: Boolean(process.env.NEXT_PUBLIC_HUNT_FACTORY),
     supabase: Boolean(
       process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY

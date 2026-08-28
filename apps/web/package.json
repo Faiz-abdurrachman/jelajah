@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "npx playwright test",
     "test:e2e": "npx playwright test --project=chromium",
+    "verify:l4": "node --env-file-if-exists=.env.local scripts/verify-level4-readiness.mjs",
     "demo:record": "node scripts/record-level3-demo.mjs"
   },
   "dependencies": {
