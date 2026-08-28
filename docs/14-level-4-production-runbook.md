@@ -25,14 +25,25 @@ Create or reactivate a Supabase project. Copy its project URL, publishable/anon
 key, and server-only secret/service-role key into local `.env.local`. Never
 commit these values.
 
-Apply the migrations in order through the Supabase SQL Editor or the team's
-normal migration workflow:
+For a **brand-new empty project**, run this single complete schema through the
+Supabase SQL Editor:
+
+1. `apps/web/lib/supabase/schema.sql`
+
+Do not run migration 001 first on an empty project: it alters tables that do
+not exist yet. The complete schema already contains the Level 4 tables, RLS,
+and policies.
+
+For an **existing JELAJAH project that already has the base tables**, apply the
+migrations in order through the Supabase SQL Editor or the team's normal
+migration workflow:
 
 1. `apps/web/lib/supabase/migrations/001_secure_gps_mvp.sql`
 2. `apps/web/lib/supabase/migrations/002_level4_production_mvp.sql`
 
 Migration 002 creates consent, wallet interaction, and feedback tables with RLS
-enabled. Browser roles cannot read or write private validation data.
+enabled. Browser roles cannot read or write private validation data. Never run
+both the complete schema and the migrations on the same fresh database.
 
 ## 2. Configure Local Release Environment
 
