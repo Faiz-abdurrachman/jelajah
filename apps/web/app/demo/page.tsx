@@ -10,13 +10,13 @@ const videoSources = [
   {
     id: "mp4",
     label: "MP4",
-    src: "/demo/jelajah-level3-demo.mp4?v=20260828-2",
+    src: "/demo/jelajah-level3-demo.mp4",
     download: "/demo/jelajah-level3-demo.mp4",
   },
   {
     id: "webm",
     label: "WebM",
-    src: "/demo/jelajah-level3-demo.webm?v=20260828-2",
+    src: "/demo/jelajah-level3-demo.webm",
     download: "/demo/jelajah-level3-demo.webm",
   },
 ] as const;
@@ -44,13 +44,13 @@ export default function DemoPage() {
     let fallbackRequested = false;
 
     const markReady = () => {
-      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) return;
       settled = true;
       setPlaybackState("ready");
     };
 
     const tryFallback = () => {
-      if (fallbackRequested || settled || video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      if (fallbackRequested || settled || video.readyState >= HTMLMediaElement.HAVE_METADATA) {
         markReady();
         return;
       }
@@ -66,6 +66,7 @@ export default function DemoPage() {
 
     const fallbackTimer = window.setTimeout(tryFallback, 5000);
 
+    video.addEventListener("loadedmetadata", markReady);
     video.addEventListener("loadeddata", markReady);
     video.addEventListener("canplay", markReady);
     video.addEventListener("error", tryFallback);
@@ -74,6 +75,7 @@ export default function DemoPage() {
 
     return () => {
       window.clearTimeout(fallbackTimer);
+      video.removeEventListener("loadedmetadata", markReady);
       video.removeEventListener("loadeddata", markReady);
       video.removeEventListener("canplay", markReady);
       video.removeEventListener("error", tryFallback);
@@ -123,13 +125,13 @@ export default function DemoPage() {
       <section className="relative mx-auto mt-10 max-w-6xl overflow-hidden rounded-[28px] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,.55)]">
         <video
           ref={videoRef}
-          key={activeSource.id}
           src={activeSource.src}
           className="aspect-video w-full bg-black object-contain"
           controls
           playsInline
           preload="metadata"
           poster="/screenshots/level-3/live-events-desktop.png"
+          onLoadedMetadata={() => setPlaybackState("ready")}
           onLoadedData={() => setPlaybackState("ready")}
           onCanPlay={() => setPlaybackState("ready")}
           onWaiting={() => setPlaybackState("buffering")}
