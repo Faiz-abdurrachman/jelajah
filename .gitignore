@@ -1,6 +1,17 @@
 # OpenCode session state
 .omo/
 
+# Local AI/session context (not part of the public repository)
+.ai/
+/AGENTS.md
+/CURRENT-CHECKPOINT.md
+/HANDOFF-AI.md
+/JELAJAH-HANDOFF.md
+/PLAN.md
+/idea-submission.txt
+/apps/web/AGENTS.md
+/apps/web/CLAUDE.md
+
 # Env files
 .env
 .env.local

@@ -1,5 +1,10 @@
 # JELAJAH — Belt Submission Guide
 
+> [!NOTE]
+> This is the original requirement/evidence template. Its unchecked boxes are
+> not the current implementation status. Use the submission sections in
+> [`../README.md`](../README.md) for verified Level 1–4 status.
+
 ## Level 1: White Belt
 
 ### Requirements Checklist

@@ -1,22 +1,32 @@
 # Level 4 Production Runbook
 
 This runbook is the release gate for the Level 4 MVP. Do not recruit pilot
-participants until every preflight check passes. Stellar Testnet remains the
-canonical economic state; Supabase stores verified indexes, consent, and
-product-validation evidence.
+participants until every preflight check and the real-wallet production smoke
+test pass. Stellar Testnet remains the canonical economic state; Supabase stores
+verified indexes, consent, and product-validation evidence.
 
-## Current Release Blockers (2026-08-28)
+## Current Release Status (2026-08-28)
 
-- The linked Vercel project does not yet contain Supabase, Pinata, or map
-  environment variables.
-- The Supabase URL currently configured in local development does not resolve,
-  so migrations and Level 4 tables cannot be verified.
-- Vercel Web Analytics and Speed Insights are integrated in code but still need
-  to be enabled in the Vercel project dashboard.
-- No real-user pilot has run. The public evidence page must remain below 10/10
+Completed and verified:
+
+- The fresh Supabase project has the complete schema, Level 4 tables, and RLS.
+- Local and Vercel Production contain the required Supabase and Pinata variable
+  names; secret values are not recorded in this repository.
+- `NEXT_PUBLIC_CURRENT_LEVEL=4` is active on Stellar Testnet.
+- The Level 4 build is live at `https://jelajah-stellar.vercel.app`.
+- Production `/api/health` and the full Level 4 readiness preflight passed.
+
+Remaining release gates:
+
+- Complete and record one full post-deploy real-wallet production smoke test.
+- Enable Vercel Web Analytics and Speed Insights and capture real production
+  telemetry evidence.
+- Run the real-user pilot. The public evidence page must remain below 10/10
   until ten distinct consented wallets have confirmed Testnet interactions.
+- Aggregate feedback, capture reviewer-safe screenshots, and record the Level 4
+  demo video.
 
-These are release blockers, not application success states. Do not replace them
+These are evidence gates, not application success states. Do not replace them
 with mock credentials, fabricated wallet records, or screenshots from E2E mocks.
 
 ## 1. Provision an Active Supabase Project

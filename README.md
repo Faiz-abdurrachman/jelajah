@@ -9,7 +9,7 @@
 [![CI](https://github.com/Faiz-abdurrachman/jelajah/actions/workflows/ci.yml/badge.svg)](https://github.com/Faiz-abdurrachman/jelajah/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/demo-Vercel-black?logo=vercel)](https://jelajah-stellar.vercel.app)
 
-JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, multi-wallet, escrow Soroban, reputation XP on-chain, campaign sponsor, validasi pengguna nyata, dan event streaming. Branch `main` berisi **Level 4 release candidate di Stellar Testnet**; deployment publik masih menjalankan baseline Level 3 sampai preflight production Level 4 lulus.
+JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, multi-wallet, escrow Soroban, reputation XP on-chain, campaign sponsor, validasi pengguna nyata, dan event streaming. Branch `main` dan deployment publik menjalankan **Level 4 release candidate di Stellar Testnet**. Production health dan preflight sudah lulus; bukti pilot 10 pengguna nyata masih pending.
 
 ## Status MVP
 
@@ -26,8 +26,8 @@ JELAJAH menggabungkan eksplorasi lokasi, foto bukti IPFS, multi-wallet, escrow S
 | Factory → Instance → Reputation | Deployed dan terbukti end-to-end di Testnet |
 | Event Soroban real-time | Server-Sent Events dengan cursor, retry, dan reconnect |
 | CI + contract deployment workflow | Terimplementasi dan tervalidasi |
-| Campaign sponsor → funded Testnet hunt | Terimplementasi dan teruji lokal; production pending |
-| Pilot consent, verified interaction, dan feedback | Terimplementasi; pengguna nyata pending |
+| Campaign sponsor → funded Testnet hunt | Terimplementasi dan deployed; smoke test wallet production pending |
+| Pilot consent, verified interaction, dan feedback | Live di production; pengguna nyata pending |
 | Vercel Analytics + Speed Insights | Terintegrasi; enable dashboard pending |
 | Public pilot evidence report | Terimplementasi; hasil nyata pending |
 | Live demo | [jelajah-stellar.vercel.app](https://jelajah-stellar.vercel.app) |
@@ -178,18 +178,18 @@ Level 4 mengubah JELAJAH menjadi MVP campaign activation: sponsor membuat campai
 
 | Requirement | Implementasi | Status |
 |---|---|---|
-| Functional production MVP | Sponsor workspace → campaign → funded hunt escrow | Code ready; production preflight blocked |
+| Functional production MVP | Sponsor workspace → campaign → funded hunt escrow | Deployed; smoke test wallet production pending |
 | Stable frontend + contract architecture | Signed session, server-verified index, canonical Stellar ledger | Siap |
 | Mobile responsive UI | Campaign, pilot, dan evidence diuji pada viewport 390 px | Siap |
 | Loading + error handling | Route loading, route/global recovery, retryable indexing, explicit transaction phases | Siap |
 | 10 real users | Evidence dihitung dari consented wallet + confirmed Testnet interaction | Pending pilot; tidak difabrikasi |
 | Proof of wallet interactions | Hash, method, ledger, contract, dan waktu disimpan setelah verifikasi RPC | Infrastructure ready; real records pending |
 | User feedback collection | Survey hanya terbuka setelah receipt terverifikasi | Infrastructure ready; responses pending |
-| Production deployment | Vercel project terhubung | Level 4 deploy pending database preflight |
+| Production deployment | Vercel project terhubung, `/api/health` dan preflight hijau | Live |
 | Monitoring and analytics | Vercel Web Analytics, Speed Insights, `/api/health` | Code ready; dashboard enable pending |
 | Smart contract Testnet | Factory, escrow instance, dan Reputation deployment existing | Siap |
 | Minimum 15 meaningful commits | Acceptance, data/API, UI, pilot, evidence, ops, tests, dan docs | Siap pada release candidate ini |
-| Public repository | [github.com/Faiz-abdurrachman/jelajah](https://github.com/Faiz-abdurrachman/jelajah) | Siap setelah push |
+| Public repository | [github.com/Faiz-abdurrachman/jelajah](https://github.com/Faiz-abdurrachman/jelajah) | Siap |
 | Demo, screenshots, feedback summary | Harus berasal dari release production dan pilot nyata | Pending |
 
 Level 4 routes:
@@ -200,7 +200,7 @@ Level 4 routes:
 - `/pilot/evidence` — public aggregate and Explorer transaction receipts.
 - `/api/health` — non-secret deployment readiness signal.
 
-The current production blockers and exact release order are documented in [`docs/14-level-4-production-runbook.md`](docs/14-level-4-production-runbook.md). The release must not be submitted as complete until the evidence page contains 10 distinct qualified wallets, feedback is summarized, analytics/monitoring screenshots exist, and the Level 4 demo has been recorded.
+The remaining pilot gates and exact release order are documented in [`docs/14-level-4-production-runbook.md`](docs/14-level-4-production-runbook.md). The release must not be submitted as complete until the evidence page contains 10 distinct qualified wallets, feedback is summarized, analytics/monitoring screenshots exist, and the Level 4 demo has been recorded.
 
 ## Tampilan
 
@@ -326,7 +326,7 @@ npm run test:e2e
 npm run verify:l4
 ```
 
-Status terakhir: typecheck, lint, clean production build, dependency audit, dan **32 Playwright tests** lulus lokal. Suite mencakup wallet, payment, contract events, campaign mobile flow, consent-gated pilot feedback, public evidence, health, dan API security. Level 4 belum diklaim lulus terhadap production sampai preflight database hijau.
+Status terakhir: typecheck, lint, clean production build, dependency audit, dan **32 Playwright tests** lulus lokal. Suite mencakup wallet, payment, contract events, campaign mobile flow, consent-gated pilot feedback, public evidence, health, dan API security. Production Level 4 health dan preflight lulus pada 2026-08-28; real-user pilot tetap pending.
 
 ### Smart contracts
 
@@ -382,14 +382,15 @@ Sebelum Mainnet dibutuhkan attestation/oracle lokasi, dispute yang benar-benar m
 
 ## Checklist Operasional Wajib
 
-- [ ] Terapkan migration `001` lalu `002` ke project Supabase aktif.
-- [ ] Ganti legacy/leaked `service_role` dengan Secret API Key baru.
-- [ ] Pasang `WALLET_SESSION_SECRET` yang terpisah di development dan hosting.
-- [ ] Pasang credential Pinata hanya pada server environment.
-- [ ] Jalankan seluruh quality gates sebelum deploy.
-- [ ] Pastikan Freighter menggunakan Stellar Testnet.
+- [x] Terapkan full schema pada project Supabase baru dan verifikasi RLS.
+- [x] Ganti legacy/leaked `service_role` dengan Secret API Key baru.
+- [x] Pasang `WALLET_SESSION_SECRET` pada hosting tanpa mengekspos nilainya.
+- [x] Pasang credential Pinata hanya pada server environment.
+- [x] Jalankan seluruh quality gates dan production preflight.
+- [x] Pastikan aplikasi dan Freighter menggunakan Stellar Testnet.
+- [ ] Selesaikan dan catat smoke test wallet Level 4 di production.
 - [ ] Enable Vercel Web Analytics dan Speed Insights.
-- [ ] Pastikan `npm run verify:l4` dan production `/api/health` hijau.
+- [x] Pastikan `npm run verify:l4` dan production `/api/health` hijau.
 - [ ] Selesaikan 10+ sesi pilot wallet unik sebelum membuat screenshot evidence.
 
 ## Roadmap
@@ -400,7 +401,7 @@ Sebelum Mainnet dibutuhkan attestation/oracle lokasi, dispute yang benar-benar m
 | L2 | GPS Hunt dan XLM escrow | MVP Testnet selesai |
 | L3 | Inter-contract reputation, SSE, tests, CI/CD, live demo | MVP Testnet selesai |
 | L3+ | Quest chain, verifier, dispute dan appeal production flow | Roadmap |
-| L4 | Campaign sponsor, production operations, pilot, dan evidence | Release candidate; deploy + pilot pending |
+| L4 | Campaign sponsor, production operations, pilot, dan evidence | Production live; pilot + evidence pending |
 | L5 | Community, streak, badges | Direncanakan |
 | L6 | Mainnet dan independent security audit | Direncanakan |
 | L7 | API/SDK dan enterprise | Direncanakan |
