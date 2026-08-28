@@ -41,6 +41,28 @@ export interface CampaignDto {
   hunts: CampaignHuntDto[];
 }
 
+export type PilotRole = "sponsor" | "hunter";
+
+export interface PilotInteractionDto {
+  transactionHash: string;
+  action: string;
+  contractId: string | null;
+  ledger: number | null;
+  confirmedAt: string;
+}
+
+export interface PilotStatusDto {
+  onboarding: null | {
+    role: PilotRole;
+    currentStep: string;
+    consentVersion: string;
+    consentedAt: string;
+    completedAt: string | null;
+  };
+  interactions: PilotInteractionDto[];
+  feedbackSubmitted: boolean;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
@@ -316,3 +338,116 @@ export async function recordWalletInteraction(input: {
   return true;
 }
 
+export async function getPilotStatus(publicKey: string): Promise<PilotStatusDto> {
+  const db = getSupabaseAdmin();
+  const [onboardingResult, interactionResult, feedbackResult] = await Promise.all([
+    db
+      .from("onboarding_sessions")
+      .select("role, current_step, consent_version, consented_at, completed_at")
+      .eq("public_key", publicKey)
+      .maybeSingle(),
+    db
+      .from("wallet_interactions")
+      .select("transaction_hash, action, contract_id, ledger, confirmed_at")
+      .eq("public_key", publicKey)
+      .order("confirmed_at", { ascending: false })
+      .limit(20),
+    db
+      .from("feedback_submissions")
+      .select("id")
+      .eq("public_key", publicKey)
+      .limit(1),
+  ]);
+  if (onboardingResult.error) throw onboardingResult.error;
+  if (interactionResult.error) throw interactionResult.error;
+  if (feedbackResult.error) throw feedbackResult.error;
+
+  const onboarding = onboardingResult.data;
+  return {
+    onboarding: onboarding
+      ? {
+          role: String(onboarding.role) as PilotRole,
+          currentStep: String(onboarding.current_step),
+          consentVersion: String(onboarding.consent_version),
+          consentedAt: String(onboarding.consented_at),
+          completedAt: onboarding.completed_at ? String(onboarding.completed_at) : null,
+        }
+      : null,
+    interactions: (interactionResult.data ?? []).map((interaction) => ({
+      transactionHash: String(interaction.transaction_hash),
+      action: String(interaction.action),
+      contractId: interaction.contract_id ? String(interaction.contract_id) : null,
+      ledger: interaction.ledger === null ? null : toSafeInteger(interaction.ledger),
+      confirmedAt: String(interaction.confirmed_at),
+    })),
+    feedbackSubmitted: Boolean(feedbackResult.data?.length),
+  };
+}
+
+export async function startPilotOnboarding(input: {
+  publicKey: string;
+  role: PilotRole;
+  consentVersion: string;
+}): Promise<void> {
+  const db = getSupabaseAdmin();
+  await ensureLevel4User(input.publicKey);
+  const { error } = await db.from("onboarding_sessions").upsert(
+    {
+      public_key: input.publicKey,
+      role: input.role,
+      consent_version: input.consentVersion,
+      current_step: "pilot_started",
+      consented_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "public_key" }
+  );
+  if (error) throw error;
+}
+
+export async function completePilotOnboarding(publicKey: string): Promise<void> {
+  const completedAt = new Date().toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from("onboarding_sessions")
+    .update({ current_step: "pilot_completed", completed_at: completedAt, updated_at: completedAt })
+    .eq("public_key", publicKey)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("ONBOARDING_REQUIRED");
+}
+
+export async function submitPilotFeedback(input: {
+  publicKey: string;
+  role: PilotRole;
+  onboardingRating: number;
+  transactionClarityRating: number;
+  usabilityRating: number;
+  understoodRewardTiming: boolean;
+  wouldUseAgain: boolean;
+  confusion: string | null;
+  suggestion: string | null;
+}): Promise<void> {
+  const db = getSupabaseAdmin();
+  const { data: existing, error: lookupError } = await db
+    .from("feedback_submissions")
+    .select("id")
+    .eq("public_key", input.publicKey)
+    .limit(1);
+  if (lookupError) throw lookupError;
+  if (existing?.length) throw new Error("FEEDBACK_ALREADY_SUBMITTED");
+
+  const { error } = await db.from("feedback_submissions").insert({
+    public_key: input.publicKey,
+    role: input.role,
+    onboarding_rating: input.onboardingRating,
+    transaction_clarity_rating: input.transactionClarityRating,
+    usability_rating: input.usabilityRating,
+    understood_reward_timing: input.understoodRewardTiming,
+    would_use_again: input.wouldUseAgain,
+    confusion: input.confusion,
+    suggestion: input.suggestion,
+    consent_to_anonymous_use: true,
+  });
+  if (error) throw error;
+}
