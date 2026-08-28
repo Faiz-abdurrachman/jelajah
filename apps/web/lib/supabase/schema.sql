@@ -140,21 +140,81 @@ CREATE TABLE IF NOT EXISTS campaigns (
   name VARCHAR(100) NOT NULL,
   description TEXT,
   budget BIGINT,
+  budget_stroops BIGINT NOT NULL DEFAULT 0,
+  funded_stroops BIGINT NOT NULL DEFAULT 0,
+  asset_code VARCHAR(12) NOT NULL DEFAULT 'XLM',
+  asset_contract VARCHAR(56),
   start_date TIMESTAMP,
   end_date TIMESTAMP,
-  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'cancelled')),
-  created_at TIMESTAMP DEFAULT NOW()
+  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'funding', 'active', 'paused', 'completed', 'cancelled')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (budget_stroops >= 0 AND funded_stroops >= 0),
+  CHECK (start_date IS NULL OR end_date IS NULL OR end_date > start_date)
 );
 
 CREATE INDEX idx_campaigns_brand ON campaigns(brand_pubkey);
+CREATE INDEX idx_campaigns_status ON campaigns(status, created_at DESC);
 
 -- ─── Campaign Hunts (junction table) ──────────────────── L4
 
 CREATE TABLE IF NOT EXISTS campaign_hunts (
   campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
   hunt_id INTEGER NOT NULL REFERENCES hunts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (campaign_id, hunt_id)
 );
+
+CREATE INDEX idx_campaign_hunts_hunt ON campaign_hunts(hunt_id);
+
+-- ─── Level 4 Product Validation ─────────────────────────
+
+CREATE TABLE IF NOT EXISTS onboarding_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  public_key VARCHAR(56) NOT NULL UNIQUE REFERENCES users(public_key) ON DELETE CASCADE,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('sponsor', 'hunter')),
+  consent_version VARCHAR(20) NOT NULL,
+  current_step VARCHAR(40) NOT NULL DEFAULT 'wallet_connected',
+  consented_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS wallet_interactions (
+  transaction_hash CHAR(64) PRIMARY KEY,
+  public_key VARCHAR(56) NOT NULL REFERENCES users(public_key) ON DELETE CASCADE,
+  action VARCHAR(40) NOT NULL,
+  contract_id VARCHAR(56),
+  network VARCHAR(20) NOT NULL DEFAULT 'testnet' CHECK (network = 'testnet'),
+  ledger BIGINT,
+  status VARCHAR(20) NOT NULL DEFAULT 'confirmed' CHECK (status = 'confirmed'),
+  confirmed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_wallet_interactions_user
+  ON wallet_interactions(public_key, confirmed_at DESC);
+CREATE INDEX idx_wallet_interactions_action
+  ON wallet_interactions(action, confirmed_at DESC);
+
+CREATE TABLE IF NOT EXISTS feedback_submissions (
+  id BIGSERIAL PRIMARY KEY,
+  public_key VARCHAR(56) NOT NULL REFERENCES users(public_key) ON DELETE CASCADE,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('sponsor', 'hunter')),
+  onboarding_rating SMALLINT NOT NULL CHECK (onboarding_rating BETWEEN 1 AND 5),
+  transaction_clarity_rating SMALLINT NOT NULL CHECK (transaction_clarity_rating BETWEEN 1 AND 5),
+  usability_rating SMALLINT NOT NULL CHECK (usability_rating BETWEEN 1 AND 5),
+  understood_reward_timing BOOLEAN NOT NULL,
+  would_use_again BOOLEAN NOT NULL,
+  confusion TEXT CHECK (confusion IS NULL OR char_length(confusion) <= 1000),
+  suggestion TEXT CHECK (suggestion IS NULL OR char_length(suggestion) <= 1000),
+  consent_to_anonymous_use BOOLEAN NOT NULL CHECK (consent_to_anonymous_use = TRUE),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_feedback_submissions_created
+  ON feedback_submissions(created_at DESC);
 
 -- ─── Referrals ────────────────────────────────────────── L4
 
@@ -288,6 +348,9 @@ ALTER TABLE appeals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE brands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_hunts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE onboarding_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wallet_interactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feedback_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leaderboard_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE streaks ENABLE ROW LEVEL SECURITY;
@@ -303,8 +366,16 @@ CREATE POLICY "public disputes are readable" ON disputes FOR SELECT USING (true)
 CREATE POLICY "public verifiers are readable" ON verifiers FOR SELECT USING (true);
 CREATE POLICY "public appeals are readable" ON appeals FOR SELECT USING (true);
 CREATE POLICY "public brands are readable" ON brands FOR SELECT USING (true);
-CREATE POLICY "public campaigns are readable" ON campaigns FOR SELECT USING (true);
-CREATE POLICY "public campaign hunts are readable" ON campaign_hunts FOR SELECT USING (true);
+CREATE POLICY "active campaigns are readable" ON campaigns
+  FOR SELECT USING (status IN ('active', 'completed'));
+CREATE POLICY "active campaign hunts are readable" ON campaign_hunts
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM campaigns
+      WHERE campaigns.id = campaign_hunts.campaign_id
+        AND campaigns.status IN ('active', 'completed')
+    )
+  );
 CREATE POLICY "public leaderboard is readable" ON leaderboard_snapshots FOR SELECT USING (true);
 CREATE POLICY "public streaks are readable" ON streaks FOR SELECT USING (true);
 CREATE POLICY "public badges are readable" ON user_badges FOR SELECT USING (true);

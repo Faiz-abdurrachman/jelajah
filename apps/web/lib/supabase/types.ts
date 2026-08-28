@@ -216,30 +216,118 @@ export interface Database {
           name: string;
           description: string | null;
           budget: number | null;
+          budget_stroops: number;
+          funded_stroops: number;
+          asset_code: string;
+          asset_contract: string | null;
           start_date: string | null;
           end_date: string | null;
           status: string;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           brand_pubkey: string;
           name: string;
           description?: string | null;
           budget?: number | null;
+          budget_stroops?: number;
+          funded_stroops?: number;
+          asset_code?: string;
+          asset_contract?: string | null;
           start_date?: string | null;
           end_date?: string | null;
           status?: string;
           created_at?: string;
+          updated_at?: string;
         };
       };
       campaign_hunts: {
         Row: {
           campaign_id: number;
           hunt_id: number;
+          created_at: string;
         };
         Insert: {
           campaign_id: number;
           hunt_id: number;
+          created_at?: string;
+        };
+      };
+      onboarding_sessions: {
+        Row: {
+          id: number;
+          public_key: string;
+          role: string;
+          consent_version: string;
+          current_step: string;
+          consented_at: string;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          public_key: string;
+          role: string;
+          consent_version: string;
+          current_step?: string;
+          consented_at?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      wallet_interactions: {
+        Row: {
+          transaction_hash: string;
+          public_key: string;
+          action: string;
+          contract_id: string | null;
+          network: string;
+          ledger: number | null;
+          status: string;
+          confirmed_at: string;
+          recorded_at: string;
+        };
+        Insert: {
+          transaction_hash: string;
+          public_key: string;
+          action: string;
+          contract_id?: string | null;
+          network?: string;
+          ledger?: number | null;
+          status?: string;
+          confirmed_at?: string;
+          recorded_at?: string;
+        };
+      };
+      feedback_submissions: {
+        Row: {
+          id: number;
+          public_key: string;
+          role: string;
+          onboarding_rating: number;
+          transaction_clarity_rating: number;
+          usability_rating: number;
+          understood_reward_timing: boolean;
+          would_use_again: boolean;
+          confusion: string | null;
+          suggestion: string | null;
+          consent_to_anonymous_use: boolean;
+          created_at: string;
+        };
+        Insert: {
+          public_key: string;
+          role: string;
+          onboarding_rating: number;
+          transaction_clarity_rating: number;
+          usability_rating: number;
+          understood_reward_timing: boolean;
+          would_use_again: boolean;
+          confusion?: string | null;
+          suggestion?: string | null;
+          consent_to_anonymous_use: boolean;
+          created_at?: string;
         };
       };
       referrals: {
