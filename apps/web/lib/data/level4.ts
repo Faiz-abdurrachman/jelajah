@@ -63,6 +63,28 @@ export interface PilotStatusDto {
   feedbackSubmitted: boolean;
 }
 
+export interface PilotSummaryDto {
+  qualifiedUsers: number;
+  onboardedUsers: number;
+  completedUsers: number;
+  verifiedInteractions: number;
+  feedbackResponses: number;
+  averages: {
+    onboarding: number | null;
+    transactionClarity: number | null;
+    usability: number | null;
+    understoodRewardTimingPercent: number | null;
+    wouldUseAgainPercent: number | null;
+  };
+  recentTransactions: Array<{
+    transactionHash: string;
+    action: string;
+    ledger: number | null;
+    confirmedAt: string;
+  }>;
+  generatedAt: string;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
@@ -450,4 +472,77 @@ export async function submitPilotFeedback(input: {
     consent_to_anonymous_use: true,
   });
   if (error) throw error;
+}
+
+export async function getPublicPilotSummary(): Promise<PilotSummaryDto> {
+  const db = getSupabaseAdmin();
+  const [onboardingResult, interactionResult, feedbackResult] = await Promise.all([
+    db.from("onboarding_sessions").select("public_key, completed_at").limit(1000),
+    db
+      .from("wallet_interactions")
+      .select("transaction_hash, public_key, action, ledger, confirmed_at")
+      .eq("status", "confirmed")
+      .order("confirmed_at", { ascending: false })
+      .limit(1000),
+    db
+      .from("feedback_submissions")
+      .select(
+        "public_key, onboarding_rating, transaction_clarity_rating, usability_rating, understood_reward_timing, would_use_again"
+      )
+      .limit(1000),
+  ]);
+  if (onboardingResult.error) throw onboardingResult.error;
+  if (interactionResult.error) throw interactionResult.error;
+  if (feedbackResult.error) throw feedbackResult.error;
+
+  const onboardedWallets = new Set(
+    (onboardingResult.data ?? []).map((row) => String(row.public_key))
+  );
+  const completedWallets = new Set(
+    (onboardingResult.data ?? [])
+      .filter((row) => Boolean(row.completed_at))
+      .map((row) => String(row.public_key))
+  );
+  const interactionWallets = new Set(
+    (interactionResult.data ?? []).map((row) => String(row.public_key))
+  );
+  const qualifiedUsers = [...onboardedWallets].filter((wallet) => interactionWallets.has(wallet)).length;
+  const feedbackRows = feedbackResult.data ?? [];
+
+  const average = (key: "onboarding_rating" | "transaction_clarity_rating" | "usability_rating") =>
+    feedbackRows.length
+      ? Math.round(
+          (feedbackRows.reduce((total, row) => total + Number(row[key]), 0) /
+            feedbackRows.length) *
+            10
+        ) / 10
+      : null;
+  const percentage = (key: "understood_reward_timing" | "would_use_again") =>
+    feedbackRows.length
+      ? Math.round(
+          (feedbackRows.filter((row) => Boolean(row[key])).length / feedbackRows.length) * 100
+        )
+      : null;
+
+  return {
+    qualifiedUsers,
+    onboardedUsers: onboardedWallets.size,
+    completedUsers: completedWallets.size,
+    verifiedInteractions: interactionResult.data?.length ?? 0,
+    feedbackResponses: feedbackRows.length,
+    averages: {
+      onboarding: average("onboarding_rating"),
+      transactionClarity: average("transaction_clarity_rating"),
+      usability: average("usability_rating"),
+      understoodRewardTimingPercent: percentage("understood_reward_timing"),
+      wouldUseAgainPercent: percentage("would_use_again"),
+    },
+    recentTransactions: (interactionResult.data ?? []).slice(0, 20).map((row) => ({
+      transactionHash: String(row.transaction_hash),
+      action: String(row.action),
+      ledger: row.ledger === null ? null : toSafeInteger(row.ledger),
+      confirmedAt: String(row.confirmed_at),
+    })),
+    generatedAt: new Date().toISOString(),
+  };
 }
