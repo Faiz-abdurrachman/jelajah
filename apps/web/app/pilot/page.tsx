@@ -157,7 +157,7 @@ function FeedbackStep({ status, feedback, setFeedback, submitting, onSubmit }: {
 }
 
 function CompletedStep({ status }: { status: PilotStatusDto }) {
-  return <StepCard number="✓" icon={CheckCircle2} title="Sesi pilot selesai" description="Terima kasih. Feedback tersimpan dan bukti transaksi tetap dapat diverifikasi secara publik."><div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950"><strong>{status.interactions.length} interaksi Testnet terverifikasi</strong><p className="mt-1 text-xs">Satu wallet hanya dihitung sebagai satu pengguna unik pada ringkasan pilot.</p></div><Link href="/" className={buttonVariants({ variant: "outline" })}>Kembali ke beranda</Link></StepCard>;
+  return <StepCard number="✓" icon={CheckCircle2} title="Sesi pilot selesai" description="Terima kasih. Feedback tersimpan dan bukti transaksi tetap dapat diverifikasi secara publik."><div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950"><strong>{status.interactions.length} interaksi Testnet terverifikasi</strong><p className="mt-1 text-xs">Satu wallet hanya dihitung sebagai satu pengguna unik pada ringkasan pilot.</p></div><div className="flex flex-wrap gap-3"><Link href="/pilot/evidence" className={buttonVariants()}>Lihat evidence publik</Link><Link href="/" className={buttonVariants({ variant: "outline" })}>Kembali ke beranda</Link></div></StepCard>;
 }
 
 function StepCard({ number, icon: Icon, title, description, children }: { number: string; icon: typeof WalletCards; title: string; description: string; children: React.ReactNode }) {
