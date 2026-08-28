@@ -381,6 +381,8 @@ Sebelum Mainnet dibutuhkan attestation/oracle lokasi, dispute yang benar-benar m
 | [Security & Operations](docs/09-security-and-operations.md) | Security boundary dan deployment |
 | [Level 3 Inter-Contract Architecture](docs/10-level-3-inter-contract-architecture.md) | Trust model, atomic flow, invariants, dan deployment order |
 | [Level 3 Demo Script](docs/11-demo-script.md) | Recorder visual dan narasi demo 1–2 menit |
+| [Level 4 Idea Submission](docs/12-level-4-idea-submission.md) | Proposal approval untuk Proof-of-Presence Rewards Network |
+| [Level 4 Acceptance & Pilot](docs/13-level-4-acceptance-and-pilot.md) | Definition of done, real-user protocol, privacy, dan evidence |
 | [Testnet Deployment Manifest](deployments/testnet-latest.json) | WASM hashes, contract IDs, transaction proof, dan verified final state |
 
 ## Kontributor
